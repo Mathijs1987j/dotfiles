@@ -16,10 +16,11 @@
 
 (setq inhibit-compacting-font-caches t)
 
+(defconst MJ-config-file (or load-file-name buffer-file-name))
 (defun MJ-open-init-file ()
-  "Open my init.el file."
+  "Open the real init file."
   (interactive)
-  (find-file user-init-file))
+  (find-file MJ-config-file))
 
 (global-set-key (kbd "C-c i") #'MJ-open-init-file)
 
@@ -36,8 +37,10 @@
 
 (require 'package)
 ;; Use Scoop's native Windows gpg, not the Unix-style one bundled with Git
-(setq epg-gpg-program
-      (substitute-in-file-name "$USERPROFILE/scoop/shims/gpg.exe"))
+(let ((gpg (and (eq system-type 'windows-nt)
+		(substitute-in-file-name "$USERPROFILE/scoop/shims/gpg.exe"))))
+  (when (and gpg (file-exists-p gpg))
+    (setq epg-gpg-program gpg)))
 (add-to-list 'package-archives
 	     '("melpa" . "https://melpa.org/packages/"))
 
@@ -272,22 +275,3 @@
 
 (use-package flyspell
   :hook (LaTeX-mode . flyspell-mode))
-
-(custom-set-variables
- ;; custom-set-variables was added by Custom.
- ;; If you edit it by hand, you could mess it up, so be careful.
- ;; Your init file should contain only one such instance.
- ;; If there is more than one, they won't work right.
- '(package-selected-packages
-   '(aggressive-indent apheleia auctex company company-auctex consult
-		       dap-mode embark embark-consult flycheck
-		       gnu-elpa-keyring-update indent-bars js2-mode
-		       lsp-pyright lsp-ui magit marginalia orderless
-		       paredit projectile try vertico web-mode
-		       which-key yasnippet-snippets zenburn-theme)))
-(custom-set-faces
- ;; custom-set-faces was added by Custom.
- ;; If you edit it by hand, you could mess it up, so be careful.
- ;; Your init file should contain only one such instance.
- ;; If there is more than one, they won't work right.
- )
