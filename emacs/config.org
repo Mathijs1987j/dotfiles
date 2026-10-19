@@ -46,6 +46,12 @@ at the end).
 Requires Emacs 30 or newer. Blocks marked *[NixOS]* only activate where
 their dependencies exist; Windows skips them.
 
+Those blocks are wrapped in =(unless MJ-windows-p ...)= rather than using
+=use-package='s =:if=: with =:if=, =use-package= still /downloads/ the
+package (=:ensure= runs before =:if= is checked) and only skips configuring
+it. Wrapping the whole form means Windows never installs them. Nix's
+package scan finds =use-package= forms inside =unless= as well.
+
 * Header and startup
 
 The first line of =config.el= must carry the =lexical-binding= cookie, so
@@ -564,9 +570,9 @@ and environments), in LaTeX and in Org.
 Windows that is awkward, so it is skipped there.
 
 #+begin_src emacs-lisp
-(use-package pdf-tools
-  :if (not MJ-windows-p)
-  :init (pdf-loader-install))
+(unless MJ-windows-p
+  (use-package pdf-tools
+    :init (pdf-loader-install)))
 #+end_src
 
 * Spell checking
@@ -576,16 +582,16 @@ and Org derive from text-mode). It needs enchant and hunspell dictionaries
 (home.nix). Windows keeps flyspell, as before.
 
 #+begin_src emacs-lisp
-(use-package jinx
-  :if (not MJ-windows-p)
-  :hook (text-mode . jinx-mode)
-  :bind ("M-$" . jinx-correct)
-  :custom (jinx-languages "en_US nl_NL"))
+(unless MJ-windows-p
+  (use-package jinx
+    :hook (text-mode . jinx-mode)
+    :bind ("M-$" . jinx-correct)
+    :custom (jinx-languages "en_US nl_NL")))
 
-(use-package flyspell
-  :ensure nil
-  :if MJ-windows-p
-  :hook (LaTeX-mode . flyspell-mode))
+(when MJ-windows-p
+  (use-package flyspell
+    :ensure nil
+    :hook (LaTeX-mode . flyspell-mode)))
 #+end_src
 
 * Org, notebooks and slides
@@ -608,13 +614,13 @@ Org Babel runs code blocks in Emacs Lisp, Python and LaTeX.
 Babel after Python.
 
 #+begin_src emacs-lisp
-(use-package jupyter
-  :if (not MJ-windows-p)
-  :after org
-  :config
-  (org-babel-do-load-languages
-   'org-babel-load-languages
-   (append org-babel-load-languages '((jupyter . t)))))
+(unless MJ-windows-p
+  (use-package jupyter
+    :after org
+    :config
+    (org-babel-do-load-languages
+     'org-babel-load-languages
+     (append org-babel-load-languages '((jupyter . t))))))
 #+end_src
 
 org-re-reveal exports Org outlines to reveal.js slides: =C-c C-e v v=
@@ -635,9 +641,9 @@ of the exported file.
 *[NixOS]* A full terminal inside Emacs (eat does not support Windows).
 
 #+begin_src emacs-lisp
-(use-package eat
-  :if (not MJ-windows-p)
-  :commands eat)
+(unless MJ-windows-p
+  (use-package eat
+    :commands eat))
 #+end_src
 
 * Customize settings (loaded last)

@@ -272,20 +272,20 @@ Needs git and a C compiler on PATH."
   :custom
   (citar-bibliography '("~/path/to/your/references.bib")))   ; adjust
 
-(use-package pdf-tools
-  :if (not MJ-windows-p)
-  :init (pdf-loader-install))
+(unless MJ-windows-p
+  (use-package pdf-tools
+    :init (pdf-loader-install)))
 
-(use-package jinx
-  :if (not MJ-windows-p)
-  :hook (text-mode . jinx-mode)
-  :bind ("M-$" . jinx-correct)
-  :custom (jinx-languages "en_US nl_NL"))
+(unless MJ-windows-p
+  (use-package jinx
+    :hook (text-mode . jinx-mode)
+    :bind ("M-$" . jinx-correct)
+    :custom (jinx-languages "en_US nl_NL")))
 
-(use-package flyspell
-  :ensure nil
-  :if MJ-windows-p
-  :hook (LaTeX-mode . flyspell-mode))
+(when MJ-windows-p
+  (use-package flyspell
+    :ensure nil
+    :hook (LaTeX-mode . flyspell-mode)))
 
 (use-package org
   :ensure nil
@@ -295,13 +295,13 @@ Needs git and a C compiler on PATH."
    'org-babel-load-languages
    '((emacs-lisp . t) (python . t) (latex . t))))
 
-(use-package jupyter
-  :if (not MJ-windows-p)
-  :after org
-  :config
-  (org-babel-do-load-languages
-   'org-babel-load-languages
-   (append org-babel-load-languages '((jupyter . t)))))
+(unless MJ-windows-p
+  (use-package jupyter
+    :after org
+    :config
+    (org-babel-do-load-languages
+     'org-babel-load-languages
+     (append org-babel-load-languages '((jupyter . t))))))
 
 (use-package org-re-reveal
   :after org
@@ -309,9 +309,9 @@ Needs git and a C compiler on PATH."
   (org-re-reveal-root ".")
   (org-re-reveal-revealjs-version "4"))
 
-(use-package eat
-  :if (not MJ-windows-p)
-  :commands eat)
+(unless MJ-windows-p
+  (use-package eat
+    :commands eat))
 
 (load custom-file 'noerror 'nomessage)
 
