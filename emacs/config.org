@@ -1,0 +1,710 @@
+#+TITLE: Emacs configuration
+#+AUTHOR: MJ
+#+STARTUP: overview
+#+PROPERTY: header-args:emacs-lisp :tangle config.el
+
+* About this file
+
+This is my Emacs configuration, written as a literate Org document. The
+prose explains /why/; the =emacs-lisp= blocks are the configuration itself.
+
+** How it is loaded
+
+- This file (=config.org=) and its tangled output (=config.el=) live in my
+  dotfiles repository on GitHub.
+- Each machine has a small *stub* =init.el= in its Emacs directory that
+  only loads =config.el= from the repository (see [[*The stub][The stub]]).
+- Saving this file automatically *tangles* it: every =emacs-lisp= block is
+  written, in order, to =config.el= (see [[*Tangle on save][Tangle on save]]).
+- =config.el= is committed too, so a fresh machine (and Nix) can use it
+  without running Org first. Never edit =config.el= by hand: edits are
+  overwritten at the next save of this file.
+
+** The stub
+
+Not tangled; this is what the stub on each machine looks like. It only
+loads =config.el=; the path differs per machine. Everything else,
+including where Customize writes, is handled in this file.
+
+#+begin_src emacs-lisp :tangle no
+;; -*- lexical-binding: t; -*-
+;; .emacs.d/init.el (the stub; not in git; path differs per machine)
+(load "C:/Users/moiss/Documents/dotfiles/emacs/config.el")
+#+end_src
+
+On Windows the stub lives in =%APPDATA%\.emacs.d\init.el= (or
+=~/.emacs.d/init.el=); on NixOS Home Manager writes it (see the NixOS notes
+at the end).
+
+** Two machines, one file
+
+- *NixOS*: Nix installs Emacs, every package named in a =use-package= form,
+  the tree-sitter grammars and the external tools. Nothing is downloaded.
+- *Windows work laptop*: =package.el= downloads packages from GNU ELPA and
+  MELPA; Scoop, uv and npm provide the external tools.
+
+Requires Emacs 30 or newer. Blocks marked *[NixOS]* only activate where
+their dependencies exist; Windows skips them.
+
+* Header and startup
+
+The first line of =config.el= must carry the =lexical-binding= cookie, so
+it is the first line of the first block.
+
+#+begin_src emacs-lisp
+;;; config.el --- tangled from config.org; do not edit  -*- lexical-binding: t; -*-
+#+end_src
+
+Language servers send large JSON messages; these settings keep Emacs
+responsive. They used to sit inside the lsp-mode block, but they help all
+of Emacs. =inhibit-compacting-font-caches= avoids stutter with many fonts on
+Windows.
+
+#+begin_src emacs-lisp
+(setq gc-cons-threshold (* 100 1024 1024)
+      read-process-output-max (* 1024 1024)
+      inhibit-compacting-font-caches t)
+#+end_src
+
+* Platform detection and packages
+
+=MJ-nix-p= checks where an installed package actually lives: inside
+=/nix/store= means Nix built it, so =package.el= must not download anything.
+
+#+begin_src emacs-lisp
+(defconst MJ-windows-p (eq system-type 'windows-nt)
+  "Non-nil on Windows.")
+
+(defconst MJ-nix-p
+  (let ((lib (locate-library "vertico")))
+    (and lib (string-prefix-p "/nix/store/" (file-truename lib))))
+  "Non-nil when the Emacs packages are provided by Nix.")
+#+end_src
+
+On Windows, package signatures are checked with Scoop's native gpg rather
+than the Unix-style one bundled with Git.
+
+#+begin_src emacs-lisp
+(require 'package)
+
+(let ((gpg (and MJ-windows-p
+                (substitute-in-file-name "$USERPROFILE/scoop/shims/gpg.exe"))))
+  (when (and gpg (file-exists-p gpg))
+    (setq epg-gpg-program gpg)))
+
+(add-to-list 'package-archives '("melpa" . "https://melpa.org/packages/") t)
+(package-initialize)          ; harmless on Nix; ensures activation elsewhere
+
+(require 'use-package)
+(setq use-package-always-ensure (not MJ-nix-p))
+#+end_src
+
+Customize writes to its own file in the Emacs directory, never into the
+repository or the stub (on NixOS the stub is read-only). It is set here,
+early, so Customize knows where to write; the file itself is loaded at the
+very end (see [[*Customize settings (loaded last)][Customize settings]]),
+so choices made through Customize win over the defaults in this file.
+
+#+begin_src emacs-lisp
+(setq custom-file (locate-user-emacs-file "custom.el"))
+#+end_src
+
+* Editing this configuration
+
+** Opening it
+
+=C-c i= opens this Org file. =MJ-config-file= is computed from where
+=config.el= was loaded, so it works wherever the repository is cloned.
+
+#+begin_src emacs-lisp
+(defconst MJ-config-file
+  (expand-file-name "config.org"
+                    (file-name-directory (or load-file-name buffer-file-name)))
+  "The literate configuration (config.org) in the dotfiles repository.")
+
+(defun MJ-open-init-file ()
+  "Open the real configuration (config.org)."
+  (interactive)
+  (find-file MJ-config-file))
+
+(global-set-key (kbd "C-c i") #'MJ-open-init-file)
+#+end_src
+
+** Tangle on save
+
+Saving =config.org= rewrites =config.el=. Only this file is affected; other
+Org files are left alone. After tangling, =M-x eval-buffer= in =config.el=,
+or =C-c C-c= on a single block here, applies changes without restarting.
+
+#+begin_src emacs-lisp
+(defun MJ-tangle-config ()
+  "Tangle the configuration when `MJ-config-file' is saved."
+  (when (and buffer-file-name
+             (string= (file-truename buffer-file-name)
+                      (file-truename MJ-config-file)))
+    (org-babel-tangle)))
+
+(add-hook 'org-mode-hook
+          (lambda () (add-hook 'after-save-hook #'MJ-tangle-config nil t)))
+#+end_src
+
+* General behaviour
+
+All built in.
+
+#+begin_src emacs-lisp
+(setq inhibit-startup-message t
+      history-length 25
+      global-auto-revert-non-file-buffers t)
+
+(tool-bar-mode -1)
+(recentf-mode 1)
+(savehist-mode 1)
+(save-place-mode 1)
+(global-auto-revert-mode 1)
+(repeat-mode 1)                  ; e.g. C-x o o o keeps switching windows
+#+end_src
+
+Auto-close brackets in code. Emacs Lisp uses paredit instead (see
+[[*Emacs Lisp][Emacs Lisp]]).
+
+#+begin_src emacs-lisp
+(add-hook 'prog-mode-hook #'electric-pair-local-mode)
+#+end_src
+
+* Appearance
+
+#+begin_src emacs-lisp
+(load-theme 'deeper-blue t)
+;; Built-in alternative worth trying: (load-theme 'modus-vivendi t)
+
+(global-display-line-numbers-mode 1)
+(setq display-line-numbers-type 'relative)
+(dolist (hook '(shell-mode-hook eshell-mode-hook term-mode-hook
+                eat-mode-hook pdf-view-mode-hook))
+  (add-hook hook (lambda () (display-line-numbers-mode 0))))
+#+end_src
+
+Indentation guides; they use the tree-sitter syntax tree where a grammar is
+loaded.
+
+#+begin_src emacs-lisp
+(use-package indent-bars
+  :hook ((prog-mode web-mode) . indent-bars-mode)
+  :custom
+  (indent-bars-treesit-support (and (fboundp 'treesit-available-p)
+                                    (treesit-available-p))))
+#+end_src
+
+* Key discovery
+
+which-key is built into Emacs 30, so nothing is installed (=:ensure nil=).
+
+#+begin_src emacs-lisp
+(use-package which-key
+  :ensure nil
+  :config (which-key-mode))
+#+end_src
+
+* Minibuffer completion
+
+Vertical candidate lists (vertico), matching words in any order
+(orderless), annotations (marginalia), better search and jump commands
+(consult), and acting on candidates (embark). File names still complete
+path-wise (=/u/s/l= → =/usr/share/local=).
+
+#+begin_src emacs-lisp
+(use-package vertico
+  :init (vertico-mode))
+
+(use-package orderless
+  :custom
+  (completion-styles '(orderless basic))
+  (completion-category-overrides '((file (styles basic partial-completion)))))
+
+(use-package marginalia
+  :init (marginalia-mode))
+
+(use-package consult
+  :bind (("C-s"   . consult-line)
+         ("C-c f" . consult-ripgrep)          ; needs ripgrep
+         ("C-x b" . consult-buffer))
+  :init
+  ;; "Find references" and "go to definition" results through consult.
+  (setq xref-show-xrefs-function #'consult-xref
+        xref-show-definitions-function #'consult-xref))
+
+(use-package embark
+  :bind (("C-." . embark-act))
+  :init (setq prefix-help-command #'embark-prefix-help-command))
+
+(use-package embark-consult
+  :after (embark consult))
+#+end_src
+
+* In-buffer completion
+
+corfu replaces company: the same automatic pop-up, built on Emacs's own
+completion system, which eglot, AUCTeX, Org and cape all feed. =cape-file=
+replaces =company-files=.
+
+#+begin_src emacs-lisp
+(use-package corfu
+  :init (global-corfu-mode)
+  :custom
+  (corfu-auto t)
+  (corfu-auto-prefix 2)
+  (corfu-cycle t))
+
+(use-package cape
+  :init (add-hook 'completion-at-point-functions #'cape-file))
+#+end_src
+
+* Projects and git
+
+The built-in project.el replaces projectile; eglot and consult use it
+natively. The old =C-c p= prefix is kept (=C-x p= works too).
+
+#+begin_src emacs-lisp
+(use-package project
+  :ensure nil
+  :bind-keymap ("C-c p" . project-prefix-map))
+
+(use-package magit
+  :bind ("C-x g" . magit-status))
+#+end_src
+
+* Tree-sitter
+
+** Grammars
+
+- *NixOS*: grammars come from Nix (home.nix); nothing to do here.
+- *Windows*: install a C compiler once (=scoop install mingw=), then
+  =M-x MJ-treesit-install-missing=.
+
+If a grammar fails to load with an ABI/version error, it is newer than
+this Emacs supports: add a release tag as third element of its entry and
+reinstall.
+
+#+begin_src emacs-lisp
+(setq treesit-language-source-alist
+      '((python     "https://github.com/tree-sitter/tree-sitter-python")
+        (javascript "https://github.com/tree-sitter/tree-sitter-javascript" nil "src")
+        (css        "https://github.com/tree-sitter/tree-sitter-css")
+        (html       "https://github.com/tree-sitter/tree-sitter-html")
+        (json       "https://github.com/tree-sitter/tree-sitter-json")
+        (nix        "https://github.com/nix-community/tree-sitter-nix")))
+
+(defun MJ-treesit-ready-p (lang)
+  "Return non-nil if tree-sitter and the grammar for LANG are available."
+  (and (fboundp 'treesit-available-p)
+       (treesit-available-p)
+       (treesit-language-available-p lang)))
+
+(defun MJ-treesit-install-missing ()
+  "Install every grammar in `treesit-language-source-alist' not yet present.
+Needs git and a C compiler on PATH."
+  (interactive)
+  (dolist (entry treesit-language-source-alist)
+    (unless (treesit-language-available-p (car entry))
+      (treesit-install-language-grammar (car entry)))))
+#+end_src
+
+** Switching to tree-sitter modes
+
+A tree-sitter mode is used only where its grammar exists, so a machine
+without grammars silently keeps the classic modes. HTML stays on web-mode
+(reveal.js files mix HTML, CSS and JavaScript, which =html-ts-mode= cannot
+yet handle); LaTeX stays on AUCTeX.
+
+#+begin_src emacs-lisp
+(dolist (m '((python-mode     python-ts-mode python)
+             (js-mode         js-ts-mode     javascript)
+             (javascript-mode js-ts-mode     javascript)
+             (css-mode        css-ts-mode    css)
+             (js-json-mode    json-ts-mode   json)))
+  (when (MJ-treesit-ready-p (nth 2 m))
+    (add-to-list 'major-mode-remap-alist (cons (nth 0 m) (nth 1 m)))))
+#+end_src
+
+Hooks further down use the /base/ modes (=python-base-mode=,
+=js-base-mode=, =css-base-mode=): both the classic and the tree-sitter mode
+derive from them, so every setting works either way.
+
+* Language servers (eglot)
+
+eglot is built in and replaces lsp-mode, lsp-pyright and lsp-latex. A
+helper starts eglot only when the server is actually on =PATH=, so a
+machine without a given server simply skips it.
+
+The lsp-mode indentation workaround (issue #2915, the =lsp--get-indent-width=
+advice and the =tab-width= hook) is gone: eglot never drives indentation,
+so web-mode's own offsets always apply.
+
+#+begin_src emacs-lisp
+(defun MJ-eglot-ensure-if (program)
+  "Return a hook function that starts eglot only if PROGRAM is on PATH."
+  (lambda ()
+    (when (executable-find program)
+      (eglot-ensure))))
+
+(use-package eglot
+  :ensure nil
+  :bind (:map eglot-mode-map
+              ("C-c r" . eglot-rename)          ; same key as with lsp-mode
+              ("C-c a" . eglot-code-actions))
+  :custom (eglot-autoshutdown t)
+  :config
+  (add-to-list 'eglot-server-programs
+               '((python-mode python-ts-mode) . ("basedpyright-langserver" "--stdio")))
+  (add-to-list 'eglot-server-programs
+               '((web-mode :language-id "html") . ("vscode-html-language-server" "--stdio")))
+  (add-to-list 'eglot-server-programs
+               '((LaTeX-mode :language-id "latex") . ("texlab")))
+  (add-to-list 'eglot-server-programs
+               '(nix-ts-mode . ("nil"))))
+
+(add-hook 'python-base-mode-hook (MJ-eglot-ensure-if "basedpyright-langserver"))
+(add-hook 'js-base-mode-hook     (MJ-eglot-ensure-if "typescript-language-server"))
+(add-hook 'css-base-mode-hook    (MJ-eglot-ensure-if "vscode-css-language-server"))
+(add-hook 'web-mode-hook         (MJ-eglot-ensure-if "vscode-html-language-server"))
+(add-hook 'LaTeX-mode-hook       (MJ-eglot-ensure-if "texlab"))
+(add-hook 'nix-ts-mode-hook      (MJ-eglot-ensure-if "nil"))
+#+end_src
+
+Errors and warnings appear through the built-in flymake.
+
+#+begin_src emacs-lisp
+(use-package flymake
+  :ensure nil
+  :bind (:map flymake-mode-map
+              ("M-n" . flymake-goto-next-error)
+              ("M-p" . flymake-goto-prev-error)))
+#+end_src
+
+* Snippets
+
+eglot uses yasnippet automatically for snippet-style completions.
+
+#+begin_src emacs-lisp
+(use-package yasnippet
+  :init (yas-global-mode 1))
+
+(use-package yasnippet-snippets)
+#+end_src
+
+* Formatting (Apheleia)
+
+Apheleia formats buffers on save: ruff for Python (replacing black: same
+style, much faster), Prettier for HTML/CSS/JS. It replaced blacken and
+prettier-js; prettier-js never worked reliably on Windows here, for reasons
+that weren't pinned down.
+
+*How it works.* Apheleia sends the buffer's contents to the formatter in
+the background, then runs the external =diff= program to compare the
+original and formatted text, and applies only the changes. This keeps
+point, marks and undo history intact, and skips the update if you edited
+the buffer in the meantime.
+
+*External requirements* (all on =exec-path=):
+- =diff= (on Windows: Scoop's diffutils or Git's =usr/bin=);
+- =bash= on Windows, because Apheleia runs Prettier through a bundled bash
+  script, "apheleia-npx" (Git for Windows' bash works);
+- Prettier (=npm install -g prettier=) and ruff (=uv tool install ruff=;
+  on NixOS from home.nix).
+
+*Troubleshooting.* Apheleia fails silently. If saving doesn't format, run
+=M-x apheleia-goto-error= right after saving to see the formatter's output.
+Prettier honours =.prettierignore= files in the project and its parent
+folders; a project-level one (e.g. reveal.js's own, which excludes all
+=*.html=) makes Prettier report success while changing nothing. Check with
+=prettier --file-info <file>=.
+
+#+begin_src emacs-lisp
+(use-package apheleia
+  :hook ((python-base-mode js-base-mode css-base-mode web-mode) . apheleia-mode)
+  :config
+  (setf (alist-get 'python-mode apheleia-mode-alist) 'ruff
+        (alist-get 'python-ts-mode apheleia-mode-alist) 'ruff))
+#+end_src
+
+* Debugging (dape)
+
+dape replaces dap-mode. It talks to debugpy directly and does not depend on
+the LSP client. Usage: =uv add --dev debugpy= in the project, then =M-x
+dape= and choose =debugpy=; toggle breakpoints with =M-x
+dape-breakpoint-toggle=.
+
+#+begin_src emacs-lisp
+(use-package dape
+  :commands dape
+  :custom (dape-buffer-window-arrangement 'right))
+#+end_src
+
+* Emacs Lisp
+
+paredit keeps parentheses balanced; aggressive-indent keeps code indented.
+electric-pair is switched off here to avoid double bracket handling.
+
+#+begin_src emacs-lisp
+(use-package aggressive-indent
+  :hook (emacs-lisp-mode . aggressive-indent-mode))
+
+(use-package paredit
+  :hook (emacs-lisp-mode . paredit-mode))
+
+(add-hook 'emacs-lisp-mode-hook (lambda () (electric-pair-local-mode -1)))
+#+end_src
+
+* Python
+
+- Language server: basedpyright, via eglot.
+- Formatter: ruff, via Apheleia.
+- Linting: ruff, via flymake-ruff (unused imports, undefined names, style).
+- Environment: envrc puts the project's =.venv= on =PATH= (NixOS).
+
+#+begin_src emacs-lisp
+(use-package flymake-ruff
+  :hook (eglot-managed-mode . (lambda ()
+                                (when (and (derived-mode-p 'python-base-mode)
+                                           (executable-find "ruff"))
+                                  (flymake-ruff-load)))))
+#+end_src
+
+code-cells turns =# %%= comments into notebook-style cells (=C-c C-c=
+sends a cell to the Python REPL) and opens =.ipynb= files as plain
+scripts via jupytext.
+
+#+begin_src emacs-lisp
+(use-package code-cells
+  :hook (python-base-mode . code-cells-mode-maybe)
+  :bind (:map code-cells-mode-map
+              ("C-c C-c" . code-cells-eval)))
+#+end_src
+
+* HTML, CSS and JavaScript (reveal.js)
+
+web-mode stays for HTML. CSS and JavaScript use the tree-sitter modes
+(=js-ts-mode= replaces js2-mode), configured through their shared
+packages =css-mode= and =js=. All indent by two spaces.
+
+#+begin_src emacs-lisp
+(use-package web-mode
+  :mode ("\\.html?\\'" . web-mode)
+  :hook (web-mode . (lambda () (setq indent-tabs-mode nil)))
+  :custom
+  (web-mode-markup-indent-offset 2)      ; HTML tags
+  (web-mode-css-indent-offset 2)         ; embedded <style>
+  (web-mode-code-indent-offset 2))       ; embedded <script>
+
+(use-package css-mode
+  :ensure nil
+  :custom (css-indent-offset 2))
+
+(use-package js
+  :ensure nil
+  :custom (js-indent-level 2))
+#+end_src
+
+Emmet expands abbreviations such as =ul>li*5= into markup, now also in the
+tree-sitter CSS mode.
+
+#+begin_src emacs-lisp
+(use-package emmet-mode
+  :hook ((web-mode css-base-mode) . emmet-mode)
+  :custom (emmet-use-style-tag-and-attr-detection t)
+  :config (add-to-list 'emmet-css-major-modes 'css-ts-mode))
+#+end_src
+
+* Nix
+
+#+begin_src emacs-lisp
+(use-package nix-ts-mode
+  :if (MJ-treesit-ready-p 'nix)
+  :mode "\\.nix\\'")
+#+end_src
+
+* LaTeX
+
+AUCTeX stays. New: SyncTeX correlation (click in the PDF to jump to the
+source and back), completion through texlab and corfu (replacing
+company-auctex and lsp-latex), and on NixOS PDFs shown inside Emacs.
+
+#+begin_src emacs-lisp
+(use-package tex
+  :ensure auctex
+  :hook ((LaTeX-mode . visual-line-mode)
+         (LaTeX-mode . TeX-source-correlate-mode))
+  :custom
+  (TeX-auto-save t)
+  (TeX-parse-self t)
+  (TeX-master nil)                ; ask for the master file in multi-file projects
+  (TeX-source-correlate-start-server t)
+  :config
+  (unless MJ-windows-p            ; [NixOS] view PDFs in Emacs with pdf-tools
+    (setf (alist-get 'output-pdf TeX-view-program-selection) '("PDF Tools"))
+    (add-hook 'TeX-after-compilation-finished-functions
+              #'TeX-revert-document-buffer)))
+#+end_src
+
+CDLaTeX gives very fast maths input (=`a= → =\alpha=, quick fractions
+and environments), in LaTeX and in Org.
+
+#+begin_src emacs-lisp
+(use-package cdlatex
+  :hook ((LaTeX-mode . turn-on-cdlatex)
+         (org-mode   . turn-on-org-cdlatex)))
+
+(use-package citar
+  :custom
+  (citar-bibliography '("~/path/to/your/references.bib")))   ; adjust
+#+end_src
+
+*[NixOS]* pdf-tools needs a compiled helper program, which Nix builds; on
+Windows that is awkward, so it is skipped there.
+
+#+begin_src emacs-lisp
+(use-package pdf-tools
+  :if (not MJ-windows-p)
+  :init (pdf-loader-install))
+#+end_src
+
+* Spell checking
+
+*[NixOS]* jinx checks several languages at once in all text buffers (LaTeX
+and Org derive from text-mode). It needs enchant and hunspell dictionaries
+(home.nix). Windows keeps flyspell, as before.
+
+#+begin_src emacs-lisp
+(use-package jinx
+  :if (not MJ-windows-p)
+  :hook (text-mode . jinx-mode)
+  :bind ("M-$" . jinx-correct)
+  :custom (jinx-languages "en_US nl_NL"))
+
+(use-package flyspell
+  :ensure nil
+  :if MJ-windows-p
+  :hook (LaTeX-mode . flyspell-mode))
+#+end_src
+
+* Org, notebooks and slides
+
+Org Babel runs code blocks in Emacs Lisp, Python and LaTeX.
+
+#+begin_src emacs-lisp
+(use-package org
+  :ensure nil
+  :hook (org-mode . visual-line-mode)
+  :config
+  (org-babel-do-load-languages
+   'org-babel-load-languages
+   '((emacs-lisp . t) (python . t) (latex . t))))
+#+end_src
+
+*[NixOS]* emacs-jupyter runs real Jupyter kernels from Org blocks
+(=#+begin_src jupyter-python :session s=), with inline plots. It needs
+=ipykernel= in the project (=uv add --dev ipykernel=). It must be added to
+Babel after Python.
+
+#+begin_src emacs-lisp
+(use-package jupyter
+  :if (not MJ-windows-p)
+  :after org
+  :config
+  (org-babel-do-load-languages
+   'org-babel-load-languages
+   (append org-babel-load-languages '((jupyter . t)))))
+#+end_src
+
+org-re-reveal exports Org outlines to reveal.js slides: =C-c C-e v v=
+(export) or =v b= (export and open). Each course folder holds its own
+reveal.js =dist/= next to the slides, so the reveal.js root is the folder
+of the exported file.
+
+#+begin_src emacs-lisp
+(use-package org-re-reveal
+  :after org
+  :custom
+  (org-re-reveal-root ".")
+  (org-re-reveal-revealjs-version "4"))
+#+end_src
+
+* Terminal
+
+*[NixOS]* A full terminal inside Emacs (eat does not support Windows).
+
+#+begin_src emacs-lisp
+(use-package eat
+  :if (not MJ-windows-p)
+  :commands eat)
+#+end_src
+
+* Customize settings (loaded last)
+
+Settings saved through =M-x customize= live in =custom.el= (see
+[[*Platform detection and packages][Platform detection and packages]]).
+Loading it after everything else means a Customize choice overrides the
+value set above. This used to happen in the stub; doing it here keeps
+every stub, including the one Home Manager writes, a single line.
+
+#+begin_src emacs-lisp
+(load custom-file 'noerror 'nomessage)
+#+end_src
+
+* Project environments (keep last)
+
+envrc reads a project's =.envrc= via direnv and gives each buffer that
+project's =PATH=, so =python=, =ruff=, =basedpyright= and =debugpy= come from
+the project's =.venv= or Nix dev shell. It must be set up after the other
+hooks, hence its place at the end. Skipped where direnv is absent (the
+Windows laptop).
+
+#+begin_src emacs-lisp
+(use-package envrc
+  :if (executable-find "direnv")
+  :hook (after-init . envrc-global-mode))
+
+;;; config.el ends here
+#+end_src
+
+* Notes for NixOS (not tangled)
+
+Home Manager writes the stub and installs everything named above. Nix reads
+the tangled =config.el= (committed to the repository) to see which packages
+to install. Run =git add= after changes: flakes only see tracked files.
+
+#+begin_src nix :tangle no
+{ config, pkgs, ... }:
+{
+  programs.emacs = {
+    enable = true;
+    package = pkgs.emacsWithPackagesFromUsePackage {
+      config = ./emacs/config.el;
+      package = pkgs.emacs-pgtk;
+      alwaysEnsure = true;
+      extraEmacsPackages = epkgs: [
+        (epkgs.treesit-grammars.with-grammars (g: [
+          g.tree-sitter-python g.tree-sitter-javascript g.tree-sitter-css
+          g.tree-sitter-html g.tree-sitter-json g.tree-sitter-nix
+        ]))
+      ];
+    };
+  };
+
+  home.file.".emacs.d/init.el".text = ''
+    ;;; init.el --- stub written by Home Manager  -*- lexical-binding: t; -*-
+    (load (expand-file-name "~/dotfiles/emacs/config.el") nil 'nomessage)
+  '';
+
+  home.packages = with pkgs; [
+    basedpyright ruff
+    vscode-langservers-extracted typescript-language-server nodejs prettier
+    texlab texliveMedium nil ripgrep
+    enchant hunspellDicts.en_US hunspellDicts.nl_NL
+    python3Packages.jupytext
+  ];
+
+  programs.direnv = { enable = true; nix-direnv.enable = true; };
+}
+#+end_src
