@@ -313,7 +313,10 @@ Needs git and a C compiler on PATH."
   (use-package eat
     :commands eat))
 
-(load custom-file 'noerror 'nomessage)
+(let ((installed-this-session package-selected-packages))
+  (load custom-file 'noerror 'nomessage)
+  (setq package-selected-packages
+        (delete-dups (append installed-this-session package-selected-packages))))
 
 (use-package envrc
   :if (executable-find "direnv")

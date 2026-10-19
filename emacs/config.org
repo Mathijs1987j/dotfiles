@@ -654,8 +654,18 @@ Loading it after everything else means a Customize choice overrides the
 value set above. This used to happen in the stub; doing it here keeps
 every stub, including the one Home Manager writes, a single line.
 
+One exception needs care: =custom.el= also stores
+=package-selected-packages=, the list of packages I chose to install. When
+=use-package= installs a new package during startup, it adds it to that
+list in memory; loading =custom.el= afterwards would replace the list with
+the older saved copy, and =package-autoremove= would then offer to delete
+the new package. So the two lists are merged instead of overwritten.
+
 #+begin_src emacs-lisp
-(load custom-file 'noerror 'nomessage)
+(let ((installed-this-session package-selected-packages))
+  (load custom-file 'noerror 'nomessage)
+  (setq package-selected-packages
+        (delete-dups (append installed-this-session package-selected-packages))))
 #+end_src
 
 * Project environments (keep last)
