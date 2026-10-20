@@ -760,6 +760,32 @@ Org Babel runs code blocks in Emacs Lisp, Python and LaTeX.
    '((emacs-lisp . t) (python . t) (latex . t))))
 #+end_src
 
+*Removing a list item.* Org renumbers a list when items are moved
+(=M-<up>=, =M-<down>=) but not when one is killed; that needed a =C-c
+C-c= afterwards. =C-c k= kills the item the cursor is in (anywhere on any
+of its lines, sub-items included) and renumbers the list, fixing
+checkbox counters like =[1/3]= too. =C-u C-c k= deletes it without
+saving it to the kill ring. The kill ring gets the item without its
+bullet, so =M-RET= then =C-y= elsewhere moves it with a correct bullet.
+It uses Org's own list functions, the ones behind =M-<up>= and
+=M-<down>=; Org has no built-in command for this (checked up to 9.8).
+
+#+begin_src emacs-lisp
+(defun MJ-org-kill-list-item (&optional delete)
+  "Kill the list item at point, sub-items included, and renumber the list.
+With a prefix argument, DELETE the item instead of saving it to the kill ring."
+  (interactive "P")
+  (let ((item (or (org-in-item-p) (user-error "Not in a list item"))))
+    (goto-char item)
+    (let ((struct (org-list-send-item item (if delete 'delete 'kill)
+                                      (org-list-struct))))
+      (org-list-write-struct struct (org-list-parents-alist struct))
+      (org-update-checkbox-count-maybe))))
+
+(with-eval-after-load 'org
+  (define-key org-mode-map (kbd "C-c k") #'MJ-org-kill-list-item))
+#+end_src
+
 *[NixOS]* emacs-jupyter runs real Jupyter kernels from Org blocks
 (=#+begin_src jupyter-python :session s=), with inline plots. It needs
 =ipykernel= in the project (=uv add --dev ipykernel=). It must be added to

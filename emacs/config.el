@@ -378,6 +378,20 @@ Used in `cdlatex-tab-hook' so snippets work in LaTeX buffers."
    'org-babel-load-languages
    '((emacs-lisp . t) (python . t) (latex . t))))
 
+(defun MJ-org-kill-list-item (&optional delete)
+  "Kill the list item at point, sub-items included, and renumber the list.
+With a prefix argument, DELETE the item instead of saving it to the kill ring."
+  (interactive "P")
+  (let ((item (or (org-in-item-p) (user-error "Not in a list item"))))
+    (goto-char item)
+    (let ((struct (org-list-send-item item (if delete 'delete 'kill)
+                                      (org-list-struct))))
+      (org-list-write-struct struct (org-list-parents-alist struct))
+      (org-update-checkbox-count-maybe))))
+
+(with-eval-after-load 'org
+  (define-key org-mode-map (kbd "C-c k") #'MJ-org-kill-list-item))
+
 (unless MJ-windows-p
   (use-package jupyter
     :after org
