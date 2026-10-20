@@ -38,7 +38,7 @@
 (setq custom-file (locate-user-emacs-file "custom.el"))
 
 (defconst MJ-config-file
-  (expand-file-name "config.org"
+  (expand-file-name "../config.org"
                     (file-name-directory (or load-file-name buffer-file-name)))
   "The literate configuration (config.org) in the dotfiles repository.")
 
@@ -54,7 +54,8 @@
   (when (and buffer-file-name
              (string= (file-truename buffer-file-name)
                       (file-truename MJ-config-file)))
-    (org-babel-tangle)))
+    (let ((coding-system-for-write 'utf-8-unix))
+      (org-babel-tangle))))
 
 (add-hook 'org-mode-hook
           (lambda () (add-hook 'after-save-hook #'MJ-tangle-config nil t)))

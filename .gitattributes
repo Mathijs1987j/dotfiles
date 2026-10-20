@@ -1,0 +1,4 @@
+# Store files with Unix line endings, even when edited on Windows.
+* text=auto eol=lf
+*.pdf binary
+*.png binary

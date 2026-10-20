@@ -1,0 +1,2793 @@
+#+TITLE: Configuration: NixOS, Home Manager and Emacs
+#+AUTHOR: MJ
+#+STARTUP: overview
+#+PROPERTY: header-args :mkdirp yes
+#+PROPERTY: header-args:emacs-lisp :tangle emacs/config.el
+
+* About this file
+
+This one Org file is the *source* of my whole configuration: the NixOS
+system, my Home Manager user configuration, niri's settings and my Emacs
+configuration. The prose explains /why/; the code blocks are the
+configuration itself. Saving the file *tangles* it: every code block is
+written to the file named in its =:tangle= setting, in document order.
+
+The output is the ordinary modular layout below, so Nix, niri and Emacs
+never notice that the files were generated. The installer uses those files
+too: you do not need Emacs (or this file) to install a machine.
+
+** What it produces
+
+| Generated file                    | Section in this file                  | Read by                          |
+|-----------------------------------+---------------------------------------+----------------------------------|
+| =flake.nix=                       | [[*The flake][The flake]]                         | =nixos-rebuild=, =nh=            |
+| =nixos/configuration.nix=         | [[*Core: nixos/configuration.nix][System → Core]]                         | NixOS (via =flake.nix=)          |
+| =nixos/modules/hardware.nix=      | [[*Hardware: nixos/modules/hardware.nix][System → Hardware]]                     | NixOS                            |
+| =nixos/modules/desktop.nix=       | [[*Desktop: nixos/modules/desktop.nix][System → Desktop]]                      | NixOS                            |
+| =nixos/modules/programs.nix=      | [[*System programs: nixos/modules/programs.nix][System → Programs]]                     | NixOS                            |
+| =nixos/hosts/nixusb/default.nix=  | [[*nixusb: the USB test installation][System → Machines]]                     | NixOS (one per machine)          |
+| =home/*.nix=                      | [[*User: mathijs (Home Manager)][User: mathijs]]                         | Home Manager                     |
+| =home/niri/config.kdl=            | [[*niri: home/niri/config.kdl][User: mathijs → niri]]                  | niri (live link, no rebuild)     |
+| =home/email.nix=, =home/work.nix= | optional sections                     | Home Manager, once enabled       |
+| =emacs/config.el=                 | [[*Emacs: emacs/config.el][Emacs]]                                 | Emacs, and Nix (package list)    |
+
+Every generated file starts with a line saying it was generated from
+here. *Never edit a generated file*: the next save of this file
+overwrites it. Edit the block here instead.
+
+** What is not in here
+
+- =nixos/hosts/<machine>/hardware-configuration.nix=: written by the
+  installer (=nixos-generate-config=) for each machine's disks and
+  hardware. It is copied into the repository and committed, but never
+  edited by hand.
+- =flake.lock=: written by Nix; pins every input. Committed.
+- =README.md= and =.gitattributes=: short, rarely changed, edited directly.
+- Secrets: passwords, tokens and keys never go into this file or into git
+  (they live in the keyring; see the PDF, chapter 12).
+
+** How it is used
+
+1. =C-c i= in Emacs opens this file (see [[*Opening it][Opening it]]).
+2. Edit a block; =C-c '= edits it in its own language mode.
+3. Save. Emacs tangles the file: all generated files are rewritten (see
+   [[*Tangle on save][Tangle on save]]). Without Emacs open, the shell
+   command =tangle= does the same.
+4. Apply the change:
+   - Nix files: =rebuild= (=nh os switch=).
+   - niri: nothing; niri reloads its settings as soon as the file changes.
+   - Emacs: =M-x eval-buffer= in =config.el=, or restart the daemon; after
+     adding a package, =rebuild= first (Nix installs it).
+5. Commit this file *and* the generated files together (Magit: =C-x g=,
+   stage all, commit, push). A flake only sees files that git tracks, and
+   another machine (or a fresh install) uses the generated files without
+   tangling.
+
+** Conventions
+
+- Each top-level section sets the file its blocks go to, in a property
+  drawer (=:header-args:nix: :tangle home/shell.nix=). Blocks inherit it.
+- Emacs Lisp blocks go to =emacs/config.el= unless they say otherwise
+  (set at the top of this file).
+- *Package lists are assembled from pieces.* A block with
+  =:noweb-ref apps= is not written anywhere by itself; the line =<<apps>>=
+  in another block (with =:noweb yes=) is replaced by all =apps= pieces,
+  in document order and with the same indentation. That lets the Nix
+  packages an Emacs feature needs sit next to the Emacs Lisp that uses
+  them (see for example [[*Python][Python]]).
+
+* The flake
+:PROPERTIES:
+:header-args:nix: :tangle flake.nix
+:END:
+
+The entry point of the repository. It names the /inputs/ (where packages
+and modules come from) and defines one NixOS system per machine.
+=flake.lock= pins the exact version of every input.
+
+#+begin_src nix
+# GENERATED from config.org ("The flake"). Do not edit; edit config.org.
+{
+  # flake.nix: the entry point. It names the inputs (where packages and
+  # modules come from) and defines one NixOS system per machine.
+  # `flake.lock` (created automatically) pins the exact version of every
+  # input; commit it together with this file. Chapter 13 explains the layout.
+  description = "Mathijs's NixOS and Home Manager configuration";
+#+end_src
+
+** Inputs
+
+The base is the stable release; a second, newer package set
+(=pkgs.unstable=) provides Emacs 31 and its tools. Home Manager's branch
+must match the base release. When 26.11 is out, change both =26.05= lines.
+
+#+begin_src nix
+  inputs = {
+    # The base of the system: the stable release. Supported until 31 December
+    # 2026; move to 26.11 (here AND for home-manager below) when it is out.
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-26.05";
+
+    # A second, newer package set, used only for the few packages listed as
+    # pkgs.unstable.<name> (Emacs and its tools). See chapter 13.
+    nixpkgs-unstable.url = "github:NixOS/nixpkgs/nixos-unstable";
+
+    # Home Manager: your user-level configuration. Its branch must match the
+    # base nixpkgs release.
+    home-manager = {
+      url = "github:nix-community/home-manager/release-26.05";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+
+    # Provides emacsWithPackagesFromUsePackage, which reads the use-package
+    # forms in emacs/config.el and installs those packages. Applied to the
+    # unstable package set, together with Emacs 31.
+    emacs-overlay = {
+      url = "github:nix-community/emacs-overlay";
+      inputs.nixpkgs.follows = "nixpkgs-unstable";
+      inputs.nixpkgs-stable.follows = "nixpkgs";
+    };
+
+    # A weekly prebuilt "which package contains this file?" database,
+    # used by comma (`, cowsay hello`) and nix-locate. See chapter 14.
+    nix-index-database = {
+      url = "github:nix-community/nix-index-database";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+  };
+#+end_src
+
+** Outputs: one system per machine
+
+=mkHost= builds a machine from the shared system configuration plus that
+machine's folder in =nixos/hosts/=. Adding a machine is one line here and
+one section under [[*Machines][System → Machines]].
+
+#+begin_src nix
+  outputs =
+    { nixpkgs, ... }@inputs:
+    let
+      username = "mathijs"; # your login name; change it before installing
+
+      # One function builds every machine: the shared configuration plus the
+      # machine's own folder in nixos/hosts/.
+      mkHost =
+        hostName:
+        nixpkgs.lib.nixosSystem {
+          specialArgs = { inherit inputs username hostName; };
+          modules = [
+            ./nixos/configuration.nix
+            ./nixos/hosts/${hostName}
+          ];
+        };
+    in
+    {
+      nixosConfigurations = {
+        # The USB test installation on the HP EliteBook:
+        #   sudo nixos-rebuild switch --flake ~/dotfiles#nixusb   (or: nh os switch)
+        nixusb = mkHost "nixusb";
+
+        # The new laptop, once nixos/hosts/laptop/ exists (chapter 19.8):
+        # laptop = mkHost "laptop";
+      };
+    };
+}
+#+end_src
+
+* System (NixOS)
+
+Everything at this level needs root and affects the whole machine and
+every account on it. It is built by =nixos-rebuild= / =nh os switch=.
+
+** Core: nixos/configuration.nix
+:PROPERTIES:
+:header-args:nix: :tangle nixos/configuration.nix
+:END:
+
+The core (Nix itself, users, locale, Home Manager) and the list of topic
+modules.
+
+#+begin_src nix
+# GENERATED from config.org ("System (NixOS) / Core"). Do not edit; edit config.org.
+# nixos/configuration.nix: the system level, shared by every machine.
+# This file holds the core (Nix itself, users, locale, Home Manager) and
+# imports one file per topic from ./modules. Everything at this level needs
+# root and affects the whole machine. Your personal settings live in ../home/.
+{
+  pkgs,
+  inputs,
+  username,
+  ...
+}:
+
+{
+  imports = [
+    ./modules/hardware.nix # boot, firmware, graphics, sound, network, power, disks
+    ./modules/desktop.nix # niri, login screen, fonts, portals, printing
+    ./modules/programs.nix # system-wide programs, nix-ld
+    inputs.home-manager.nixosModules.home-manager
+  ];
+#+end_src
+
+*** Nix itself
+
+Flakes and the new =nix= command are switched on; identical files in the
+store are shared. Members of =wheel= may add binary caches.
+
+#+begin_src nix
+  # ---------------------------------------------------------------- Nix
+  nix.settings = {
+    experimental-features = [
+      "nix-command"
+      "flakes"
+    ];
+    auto-optimise-store = true; # hard-link identical files in the store
+    trusted-users = [ "root" "@wheel" ];
+  };
+  nixpkgs.config.allowUnfree = true; # Spotify, Mathematica, some firmware
+#+end_src
+
+*** The unstable package set
+
+=pkgs.unstable.<name>= takes a package from nixos-unstable instead of the
+stable release. The emacs-overlay is applied to it, for
+=emacsWithPackagesFromUsePackage=.
+
+#+begin_src nix
+  # pkgs.unstable: the newer package set from the nixpkgs-unstable input,
+  # available everywhere as pkgs.unstable.<name>. The emacs-overlay is applied
+  # to it (only the part that provides emacsWithPackagesFromUsePackage; the
+  # Emacs packages themselves come from nixpkgs). Chapter 13.
+  nixpkgs.overlays = [
+    (final: prev: {
+      unstable = import inputs.nixpkgs-unstable {
+        system = final.stdenv.hostPlatform.system;
+        config.allowUnfree = true;
+        overlays = [ inputs.emacs-overlay.overlays.emacs ];
+      };
+    })
+  ];
+#+end_src
+
+*** nh
+
+=nh= knows where the repository is, so =rebuild= works from any folder.
+This is also why nothing lives in =/etc/nixos=.
+
+#+begin_src nix
+  # nh: friendlier rebuilds (`nh os switch`) with a build tree and a list of
+  # changed packages; cleans old generations weekly. Chapter 14.
+  programs.nh = {
+    enable = true;
+    flake = "/home/${username}/dotfiles";
+    clean = {
+      enable = true;
+      extraArgs = "--keep 5 --keep-since 7d";
+    };
+  };
+#+end_src
+
+*** Locale and keyboard
+
+#+begin_src nix
+  # ---------------------------------------------------------------- Locale
+  time.timeZone = "Europe/Amsterdam";
+  i18n.defaultLocale = "en_US.UTF-8";
+  i18n.extraLocaleSettings = {
+    LC_TIME = "en_IE.UTF-8"; # English names, 24-hour clock, day-month order
+    LC_PAPER = "nl_NL.UTF-8"; # A4
+    LC_MEASUREMENT = "nl_NL.UTF-8"; # metric
+  };
+  # US international keyboard with AltGr dead keys (` and ' type directly;
+  # AltGr+` then a gives à). The same layout is set in niri's config.
+  services.xserver.xkb = {
+    layout = "us";
+    variant = "altgr-intl";
+  };
+  console.useXkbConfig = true; # use it on the text console as well
+#+end_src
+
+*** Users
+
+=wheel= is the administrators' group: its members may use =sudo=.
+
+#+begin_src nix
+  # ---------------------------------------------------------------- Users
+  users.users.${username} = {
+    isNormalUser = true;
+    description = "Mathijs";
+    extraGroups = [
+      "wheel" # may use sudo (chapter 6.9)
+      "networkmanager" # may change network settings
+      "video" # backlight control
+    ];
+    # Only used for the very first login. Change it at once with `passwd`.
+    initialPassword = "changeme";
+  };
+
+  # A second, separate account for work (chapter 6.10). Uncomment this block
+  # and the `users.work` line in the Home Manager block below, then rebuild.
+  # users.users.work = {
+  #   isNormalUser = true;
+  #   description = "Mathijs (work)";
+  #   extraGroups = [ "networkmanager" "video" ];
+  #   initialPassword = "changeme";
+  # };
+#+end_src
+
+*** Home Manager
+
+Home Manager runs as part of every rebuild. Each account's configuration
+is one of the =User:= sections below.
+
+#+begin_src nix
+  # ---------------------------------------------------------------- Home Manager
+  # Home Manager runs as part of every rebuild; it builds your user
+  # configuration from ../home/home.nix (chapter 6).
+  home-manager = {
+    useGlobalPkgs = true; # same pkgs (with pkgs.unstable) as the system
+    useUserPackages = true; # user packages land in /etc/profiles/per-user
+    backupFileExtension = "hm-backup"; # rename clashing files instead of failing
+    extraSpecialArgs = { inherit inputs username; };
+    sharedModules = [ inputs.nix-index-database.homeModules.nix-index ];
+    users.${username} = import ../home/home.nix;
+    # users.work = import ../home/work.nix; # the work account, see above
+  };
+
+  # The NixOS release this machine was first installed with. It is NOT the
+  # version you run; it keeps old defaults for stateful services stable.
+  # Never change it after installing.
+  system.stateVersion = "26.05";
+}
+#+end_src
+
+** Hardware: nixos/modules/hardware.nix
+:PROPERTIES:
+:header-args:nix: :tangle nixos/modules/hardware.nix
+:END:
+
+Boot, firmware, graphics, sound, networking, power and disks: the parts
+every machine shares. Settings for one machine go under
+[[*Machines][Machines]].
+
+#+begin_src nix
+# GENERATED from config.org ("System (NixOS) / Hardware"). Do not edit; edit config.org.
+# nixos/modules/hardware.nix: boot, firmware, graphics, sound, networking,
+# power and disks. Settings for one specific machine go in nixos/hosts/.
+{ ... }:
+
+{
+  # ---------------------------------------------------------------- Boot
+  boot.loader.systemd-boot.enable = true;
+  boot.loader.systemd-boot.configurationLimit = 10; # boot-menu entries kept
+  # canTouchEfiVariables is set per machine (see hosts/).
+
+  # ---------------------------------------------------------------- Firmware and graphics
+  hardware.enableRedistributableFirmware = true; # Wi-Fi, Bluetooth, audio (SOF)
+  hardware.graphics.enable = true; # Mesa: OpenGL/Vulkan, video decoding
+  services.fwupd.enable = true; # firmware updates: `fwupdmgr update`
+
+  # ---------------------------------------------------------------- Bluetooth
+  hardware.bluetooth = {
+    enable = true;
+    powerOnBoot = true;
+  };
+  services.blueman.enable = true; # D-Bus part of the Bluetooth applet
+#+end_src
+
+*** Power and swap
+
+zram is compressed swap in memory, so no swap partition is needed.
+
+#+begin_src nix
+  # ---------------------------------------------------------------- Power
+  services.power-profiles-daemon.enable = true; # balanced / power-saver / performance
+  services.upower.enable = true; # battery information for the bar
+
+  # Compressed swap in RAM: no swap partition needed (chapter 16.6).
+  zramSwap.enable = true;
+#+end_src
+
+*** Network and sound
+
+#+begin_src nix
+  # ---------------------------------------------------------------- Network
+  networking.networkmanager.enable = true; # `nmtui` in a terminal, or the applet
+  # The firewall is on by default; open ports only when you need them.
+
+  # ---------------------------------------------------------------- Sound
+  services.pulseaudio.enable = false;
+  security.rtkit.enable = true; # real-time priority for PipeWire
+  services.pipewire = {
+    enable = true;
+    alsa.enable = true;
+    alsa.support32Bit = true; # 32-bit games (Wine)
+    pulse.enable = true; # apps that speak PulseAudio
+  };
+#+end_src
+
+*** Disks
+
+#+begin_src nix
+  # ---------------------------------------------------------------- Disks
+  services.udisks2.enable = true; # mounting USB disks (udiskie, file managers)
+  services.gvfs.enable = true; # trash, phones and network shares in file managers
+  # External drives formatted for Windows (WD Elements: NTFS or exFAT).
+  # exFAT and the kernel's NTFS driver work out of the box; this adds the
+  # ntfs-3g tools (ntfsfix, mkntfs) and its driver as a fallback. Chapter 16.7.
+  boot.supportedFilesystems.ntfs = true;
+}
+#+end_src
+
+** Desktop: nixos/modules/desktop.nix
+:PROPERTIES:
+:header-args:nix: :tangle nixos/modules/desktop.nix
+:END:
+
+The system half of the desktop: the compositor, the login screen, fonts
+and printing. The user half is in [[*Desktop session: home/desktop.nix][User → Desktop session]].
+
+#+begin_src nix
+# GENERATED from config.org ("System (NixOS) / Desktop"). Do not edit; edit config.org.
+# nixos/modules/desktop.nix: the system half of the desktop. The niri
+# compositor, the login screen, fonts and printing. The user half (bar,
+# launcher, notifications, look) is in ../../home/desktop.nix.
+{
+  config,
+  pkgs,
+  lib,
+  ...
+}:
+
+{
+  # The niri compositor. This module also enables polkit, the GNOME and GTK
+  # portals (screen sharing, file pickers), gnome-keyring with its SSH agent,
+  # dconf and the PAM entry swaylock needs. Settings: ../../home/niri/.
+  programs.niri.enable = true;
+#+end_src
+
+*** Login screen
+
+#+begin_src nix
+  # Login screen: greetd with the text greeter tuigreet.
+  services.greetd = {
+    enable = true;
+    useTextGreeter = true; # keep boot messages from drawing over it
+    settings.default_session.command = lib.concatStringsSep " " [
+      "${pkgs.tuigreet}/bin/tuigreet"
+      "--time --remember --remember-session --asterisks"
+      "--sessions ${config.services.displayManager.sessionData.desktops}/share/wayland-sessions"
+      "--cmd niri-session"
+    ];
+  };
+
+  # A safety-net desktop for the first weeks: uncomment, rebuild, and pick
+  # "Plasma" in tuigreet (F3) if your niri setup ever leaves you stuck.
+  # services.desktopManager.plasma6.enable = true;
+#+end_src
+
+*** Fonts, printing and Flatpak
+
+#+begin_src nix
+  fonts.packages = with pkgs; [
+    noto-fonts # broad Unicode coverage
+    noto-fonts-cjk-sans
+    noto-fonts-color-emoji
+    dejavu_fonts
+    inter # UI font
+    nerd-fonts.jetbrains-mono # code font with icons for the bar
+  ];
+
+  # ---------------------------------------------------------------- Printing
+  services.printing.enable = true; # CUPS
+  services.avahi = {
+    enable = true; # finds network printers (driverless IPP Everywhere)
+    nssmdns4 = true;
+    openFirewall = true;
+  };
+
+  # ---------------------------------------------------------------- Apps from Flathub
+  services.flatpak.enable = true; # e.g. Spotify; chapter 19.6
+}
+#+end_src
+
+** System programs: nixos/modules/programs.nix
+:PROPERTIES:
+:header-args:nix: :tangle nixos/modules/programs.nix
+:END:
+
+Programs for every account (and root), and nix-ld, which lets ordinary
+Linux programs (uv's Python, binary wheels) run.
+
+#+begin_src nix
+# GENERATED from config.org ("System (NixOS) / System programs"). Do not edit; edit config.org.
+# nixos/modules/programs.nix: programs available to every user (and root),
+# and nix-ld for ordinary Linux binaries. Your own applications are in
+# ../../home/apps.nix.
+{ pkgs, ... }:
+
+{
+  # Firefox stays installed system-wide as the fallback browser for sites
+  # that misbehave under LibreWolf's stricter settings (chapter 17).
+  programs.firefox.enable = true;
+
+  programs.git.enable = true; # flakes need git, also as root
+
+  # nix-ld: lets ordinary Linux programs (uv's Python, pip wheels, VS Code
+  # extensions, downloaded binaries) find a dynamic loader and these
+  # libraries. Add a library here when a program reports one missing.
+  programs.nix-ld = {
+    enable = true;
+    libraries = with pkgs; [
+      stdenv.cc.cc.lib # libstdc++ (numpy, most C++ wheels)
+      zlib
+      zstd
+      openssl
+      libffi
+      glib
+      libGL # matplotlib/Qt windows
+      libxkbcommon
+      fontconfig
+      freetype
+      dbus
+      wayland
+      libx11 # X11 libraries for Tk and Qt windows under XWayland
+      libxext
+      libxrender
+      libxi
+      libxcursor
+      libxrandr
+      libxinerama
+      libxcb
+      tcl
+      tk
+    ];
+  };
+
+  environment.systemPackages = with pkgs; [
+    git
+    curl
+    wget
+    file
+    unzip
+    pciutils # lspci
+    usbutils # lsusb
+    smartmontools # smartctl: health of internal and external disks
+    xwayland-satellite # X11 apps under niri (niri starts it automatically)
+  ];
+}
+#+end_src
+
+** Machines
+
+One section per machine. Each one tangles to =nixos/hosts/<name>/default.nix=
+and is switched on by one line in [[*Outputs: one system per machine][the flake]] (=mkHost=). The
+machine's =hardware-configuration.nix= is generated during installation,
+copied next to it and committed; it is not part of this file.
+
+*** nixusb: the USB test installation
+:PROPERTIES:
+:header-args:nix: :tangle nixos/hosts/nixusb/default.nix
+:END:
+
+#+begin_src nix
+# GENERATED from config.org ("System (NixOS) / Machines / nixusb"). Do not edit; edit config.org.
+# nixos/hosts/nixusb/default.nix: settings for the USB test installation
+# only. Each machine gets a folder like this one (chapter 19.8).
+{ hostName, ... }:
+
+{
+  imports = [
+    ./hardware-configuration.nix # generated by nixos-generate-config; copy it in
+  ];
+
+  networking.hostName = hostName; # "nixusb", from flake.nix
+
+  # Boot loader on a USB disk: do NOT write boot entries into the laptop's
+  # firmware (that is where Windows's entry lives). systemd-boot still
+  # installs itself as the removable-media fallback (EFI/BOOT/BOOTX64.EFI),
+  # so the stick boots from the firmware's one-time boot menu (Esc, F9 on HP).
+  boot.loader.efi.canTouchEfiVariables = false;
+
+  # Make sure the USB disk can be found early in boot on any machine.
+  boot.initrd.availableKernelModules = [
+    "xhci_pci"
+    "usb_storage"
+    "uas"
+    "sd_mod"
+  ];
+
+  # Fewer writes to the USB disk: don't record when files were last read.
+  fileSystems."/".options = [ "noatime" ];
+}
+#+end_src
+
+*** laptop (later)
+
+When the new laptop arrives (PDF, chapter 19.8): copy the =nixusb=
+section, rename it, set its property to
+=:header-args:nix: :tangle nixos/hosts/laptop/default.nix=, remove the
+USB-specific lines (=canTouchEfiVariables= may then be =true=), and
+uncomment =laptop = mkHost "laptop";= in the flake.
+
+* User: mathijs (Home Manager)
+
+My own account. Home Manager builds it during every rebuild; nothing here
+needs root, and nothing here affects other accounts. Home Manager also
+creates the links that connect the generated files to the programs: the
+=init.el= stub for Emacs and the live link for niri's settings.
+
+** Entry point: home/home.nix
+:PROPERTIES:
+:header-args:nix: :tangle home/home.nix
+:END:
+
+Only names the topic files; each is a module, merged with the others.
+
+#+begin_src nix
+# GENERATED from config.org ("User: mathijs / Entry point"). Do not edit; edit config.org.
+# home/home.nix: Home Manager, your user level. Everything below belongs to
+# you alone: programs in your profile, files in your home folder (~/.config)
+# and user services (systemctl --user). This file only names the topic
+# files; each of them is a module that is merged with the others.
+{ ... }:
+
+{
+  imports = [
+    ./shell.nix # bash, prompt, aliases, git, tmux, command-line tools
+    ./terminal.nix # Alacritty (default) and foot
+    ./apps.nix # applications, WhatsApp Web
+    ./browser.nix # LibreWolf and default apps
+    ./dev.nix # Python (uv), language servers, LaTeX
+    ./emacs.nix # Emacs 31 with your packages, the daemon
+    ./desktop.nix # niri session: launcher, notifications, lock, idle, look
+    ./waybar.nix # the bar
+    # ./email.nix # Microsoft 365 mail in mu4e; read chapter 1 before enabling
+  ];
+
+  # home.username and home.homeDirectory are filled in by NixOS from
+  # users.users.<name>, so the same files work for a second account.
+
+  xdg.enable = true;
+  xdg.userDirs = {
+    enable = true; # ~/Documents, ~/Downloads, ~/Pictures, ...
+    createDirectories = true;
+  };
+
+  # Let Home Manager manage itself (needed for `home-manager` commands).
+  programs.home-manager.enable = true;
+
+  # The Home Manager release you started with. Never change it.
+  home.stateVersion = "26.05";
+}
+#+end_src
+
+** Shell: home/shell.nix
+:PROPERTIES:
+:header-args:nix: :tangle home/shell.nix
+:END:
+
+Bash with aliases, the prompt, git and GitHub, tmux, and the command-line
+tools.
+
+#+begin_src nix
+# GENERATED from config.org ("User: mathijs / Shell"). Do not edit; edit config.org.
+# home/shell.nix: the shell and everything you use from it. Chapters 4, 7, 14, 15.
+{ pkgs, ... }:
+
+{
+#+end_src
+
+*** Bash and aliases
+
+=rebuild= and friends are short for the =nh= commands. =cfg= opens this
+file in the running Emacs.
+
+#+begin_src nix
+  # ---------------------------------------------------------------- Bash
+  programs.bash = {
+    enable = true; # Home Manager writes ~/.bashrc, so the settings below apply
+    historySize = 20000;
+    historyControl = [ "ignoredups" "erasedups" ];
+    shellOptions = [ "histappend" "autocd" "globstar" "checkwinsize" ];
+
+    # Aliases: short names for longer commands (chapter 4.6).
+    shellAliases = {
+      # NixOS
+      rebuild = "nh os switch"; # build and switch to the new configuration
+      rebuild-boot = "nh os boot"; # build; use it from the next boot on
+      update = "nh os switch --update"; # update flake.lock, then switch
+      gens = "nh os info"; # list generations
+      # The configuration (chapter 20)
+      cfg = "emacsclient -n ~/dotfiles/config.org"; # open config.org in Emacs
+      # Everyday
+      ll = "ls -lh --group-directories-first --color=auto";
+      la = "ls -lAh --group-directories-first --color=auto";
+      ".." = "cd ..";
+      "..." = "cd ../..";
+      e = "emacsclient -n"; # open a file in the running Emacs
+      dots = "cd ~/dotfiles";
+      # Git
+      gs = "git status";
+      gl = "git log --oneline --graph --decorate -20";
+      # Disks
+      dfh = "df -h -x tmpfs -x devtmpfs -x efivarfs";
+    };
+
+    # Small shell functions, for things an alias cannot do.
+    initExtra = ''
+      # mkcd DIR: make a folder and go into it
+      mkcd() { mkdir -p -- "$1" && cd -- "$1"; }
+      # nwhy PKG: why is PKG part of the current system? (chapter 14)
+      nwhy() { nix why-depends /run/current-system "$(nix eval --raw "nixpkgs#$1.outPath")"; }
+    '';
+  };
+
+  programs.starship.enable = true; # informative prompt (git branch, venv, ...)
+  programs.fzf.enable = true; # Ctrl-R history, Ctrl-T files, Alt-C folders
+  programs.zoxide.enable = true; # `z dotf` jumps to ~/dotfiles
+  programs.direnv = {
+    enable = true; # per-project environments (.envrc); envrc in Emacs uses it
+    nix-direnv.enable = true;
+  };
+#+end_src
+
+*** Git and GitHub
+
+The commit address is the personal one, never the work address.
+
+#+begin_src nix
+  # ---------------------------------------------------------------- Git and GitHub
+  programs.git = {
+    enable = true;
+    settings = {
+      user.name = "Mathijs";
+      # Your PERSONAL address (or GitHub's private noreply address), not the
+      # work address. Chapter 15.
+      user.email = "mathijsjanssenecon@gmail.com";
+      init.defaultBranch = "main";
+      pull.rebase = false;
+    };
+  };
+  # GitHub's command-line tool: `gh auth login` once, after which git can
+  # push over HTTPS with the token gh keeps (chapters 12 and 15).
+  programs.gh = {
+    enable = true;
+    gitCredentialHelper.enable = true;
+  };
+#+end_src
+
+*** tmux, Nix helpers and command-line tools
+
+=tangle= writes all generated files from =config.org= without opening
+Emacs: the same as saving the file in Emacs. Useful after a =git pull= of
+a =config.org= that someone (you, on another machine) forgot to tangle, or
+from a plain terminal.
+
+#+begin_src nix
+  # ---------------------------------------------------------------- tmux (chapter 5)
+  programs.tmux = {
+    enable = true;
+    mouse = true;
+    keyMode = "emacs";
+    terminal = "tmux-256color";
+    historyLimit = 20000;
+  };
+
+  # ---------------------------------------------------------------- Nix helpers (chapter 14)
+  # nix-index with a weekly prebuilt database, and comma: `, cowsay hi` runs a
+  # program without installing it. Also suggests packages for unknown commands.
+  programs.nix-index.enable = true;
+  programs.nix-index-database.comma.enable = true;
+
+  home.packages = with pkgs; [
+    nix-tree # browse what the system consists of, and why
+    nix-du # graph of what takes space in the store
+    graphviz # `dot`, to draw nix-du's graph
+
+    # tangle: write every generated file from ~/dotfiles/config.org, without
+    # opening Emacs (the same as saving config.org in Emacs). Chapter 20.
+    (writeShellScriptBin "tangle" ''
+      exec emacs --batch --eval "(progn (require 'org) (setq org-src-preserve-indentation t) (let ((coding-system-for-write 'utf-8-unix)) (org-babel-tangle-file \"$HOME/dotfiles/config.org\")))"
+    '')
+
+    # Terminal tools
+    ripgrep
+    fd
+    jq
+    btop
+    fastfetch
+    tealdeer # `tldr tar`: short examples
+    yazi # terminal file manager
+    powertop # what uses power (chapter 9.6)
+  ];
+}
+#+end_src
+
+** Terminals: home/terminal.nix
+:PROPERTIES:
+:header-args:nix: :tangle home/terminal.nix
+:END:
+
+Alacritty is the default (=Mod+T=); foot stays for comparison
+(=Mod+Shift+T=). Both use the Catppuccin Mocha colours of the bar.
+
+#+begin_src nix
+# GENERATED from config.org ("User: mathijs / Terminals"). Do not edit; edit config.org.
+# home/terminal.nix: terminal emulators. Alacritty is the default (Mod+T);
+# foot stays installed for comparison (Mod+Shift+T). Chapter 7.4.
+{ ... }:
+
+let
+  font = "JetBrainsMono Nerd Font";
+  # Catppuccin Mocha colours, the same palette as the bar and launcher.
+  c = {
+    base = "#1e1e2e";
+    text = "#cdd6f4";
+    surface = "#45475a";
+    subtext = "#a6adc8";
+    red = "#f38ba8";
+    green = "#a6e3a1";
+    yellow = "#f9e2af";
+    blue = "#89b4fa";
+    pink = "#f5c2e7";
+    teal = "#94e2d5";
+  };
+in
+{
+  programs.alacritty = {
+    enable = true;
+    settings = {
+      font.normal.family = font;
+      font.size = 11;
+      window.padding = {
+        x = 6;
+        y = 4;
+      };
+      scrolling.history = 20000;
+      mouse.hide_when_typing = true;
+      colors = {
+        primary = {
+          background = c.base;
+          foreground = c.text;
+        };
+        normal = {
+          black = c.surface;
+          red = c.red;
+          green = c.green;
+          yellow = c.yellow;
+          blue = c.blue;
+          magenta = c.pink;
+          cyan = c.teal;
+          white = c.subtext;
+        };
+        bright = {
+          black = "#585b70";
+          red = c.red;
+          green = c.green;
+          yellow = c.yellow;
+          blue = c.blue;
+          magenta = c.pink;
+          cyan = c.teal;
+          white = c.text;
+        };
+      };
+    };
+  };
+
+  programs.foot = {
+    enable = true;
+    settings = {
+      main.font = "${font}:size=11";
+      main.pad = "6x4";
+      mouse.hide-when-typing = "yes";
+      scrollback.lines = 20000;
+      colors-dark = {
+        background = "1e1e2e";
+        foreground = "cdd6f4";
+      };
+    };
+  };
+}
+#+end_src
+
+** Applications: home/apps.nix
+:PROPERTIES:
+:header-args:nix: :tangle home/apps.nix
+:END:
+
+My private applications. The package list is assembled from the pieces in
+the subsections below (=<<apps>>=), so each group can carry its own
+explanation.
+
+#+begin_src nix :noweb yes
+# GENERATED from config.org ("User: mathijs / Applications"). Do not edit; edit config.org.
+# home/apps.nix: your (private) applications. The browser: browser.nix.
+{ config, pkgs, ... }:
+
+let
+  # whatsapp-web: WhatsApp Web in a window of its own, on the "chat"
+  # workspace (Mod+Shift+W in niri; chapter 17.5). It is LibreWolf with a
+  # separate profile, so it runs as a separate LibreWolf process: links and
+  # windows of your normal browser stay apart. --name gives its window the
+  # Wayland app id "whatsapp", which niri's window rule matches. The profile
+  # keeps the WhatsApp login (scan the QR code once).
+  whatsapp-web = pkgs.writeShellApplication {
+    name = "whatsapp-web";
+    text = ''
+      profile="${config.xdg.dataHome}/librewolf-whatsapp"
+      mkdir -p "$profile"
+      exec ${config.programs.librewolf.finalPackage}/bin/librewolf \
+        --profile "$profile" --name whatsapp --class whatsapp \
+        https://web.whatsapp.com "$@"
+    '';
+  };
+in
+{
+  home.packages = with pkgs; [
+    <<apps>>
+  ];
+
+  # A launcher entry, so WhatsApp also appears in fuzzel (Mod+D).
+  xdg.desktopEntries.whatsapp-web = {
+    name = "WhatsApp (web)";
+    exec = "whatsapp-web";
+    icon = "librewolf";
+    categories = [ "Network" "Chat" ];
+    settings.StartupWMClass = "whatsapp";
+  };
+}
+#+end_src
+
+*** Chat and mail
+
+All three open on the "chat" workspace (window rules in
+[[*Where windows open][niri]]). WhatsApp is only used through the web: no
+wrapper app, just the =whatsapp-web= launcher defined above.
+
+#+begin_src nix :noweb-ref apps :tangle no
+signal-desktop
+whatsapp-web # WhatsApp Web in its own window (defined above)
+thunderbird # mail and calendars; Microsoft 365 via IMAP or Graph (chapter 1.6)
+#+end_src
+
+*** Office, music and media
+
+#+begin_src nix :noweb-ref apps :tangle no
+libreoffice
+shotcut
+musescore
+mpv # video
+loupe # images
+papers # PDFs
+#+end_src
+
+*** Downloads and games
+
+#+begin_src nix :noweb-ref apps :tangle no
+qbittorrent
+heroic # GOG games (Civ IV), via Wine/Proton
+augustus # Caesar 3 engine; point it at your GOG game files
+#+end_src
+
+*** Files, disks and passwords
+
+#+begin_src nix :noweb-ref apps :tangle no
+nautilus # graphical file manager
+gnome-disk-utility # "Disks": format drives, check health (chapter 16)
+seahorse # view the keyring: passwords, SSH keys (chapter 12)
+#+end_src
+
+** Browser: home/browser.nix
+:PROPERTIES:
+:header-args:nix: :tangle home/browser.nix
+:END:
+
+LibreWolf with a few defaults softened, and the default applications for
+links and files. =resistFingerprinting= stays off: one of the things it
+does is report a /light/ colour preference to every site (dark-mode
+preference is a fingerprint), so dark sites would turn light.
+
+#+begin_src nix
+# GENERATED from config.org ("User: mathijs / Browser"). Do not edit; edit config.org.
+# home/browser.nix: LibreWolf, and which programs open links and files.
+{ ... }:
+
+{
+  # ---------------------------------------------------------------- LibreWolf
+  # Chapter 17. These settings go into ~/.librewolf/librewolf.overrides.cfg
+  # and soften the defaults that most often get in the way. They apply to
+  # every LibreWolf profile, including WhatsApp's (apps.nix).
+  programs.librewolf = {
+    enable = true;
+    settings = {
+      # Keep cookies and logins when the browser closes (history is still
+      # cleared). Sites stay logged in: Outlook web, GitHub, school portals.
+      "privacy.clearOnShutdown_v2.cookiesAndStorage" = false;
+      "privacy.clearOnShutdown.cookies" = false;
+      # resistFingerprinting forces a light theme, reports the time zone as
+      # UTC and makes some sites misbehave. Firefox's milder fingerprinting
+      # protection stays on instead. Set to true for maximum privacy.
+      "privacy.resistFingerprinting" = false;
+      "privacy.fingerprintingProtection" = true;
+      # Allow WebGL (maps, GeoGebra, some reveal.js decks) without a prompt.
+      "webgl.disabled" = false;
+      # Firefox Sync is off by default in LibreWolf; uncomment to use it.
+      # "identity.fxaccounts.enabled" = true;
+    };
+  };
+
+  # Default applications for links and files.
+  xdg.mimeApps = {
+    enable = true;
+    defaultApplications = {
+      "text/html" = "librewolf.desktop";
+      "x-scheme-handler/http" = "librewolf.desktop";
+      "x-scheme-handler/https" = "librewolf.desktop";
+      "application/pdf" = "org.gnome.Papers.desktop";
+      "image/png" = "org.gnome.Loupe.desktop";
+      "image/jpeg" = "org.gnome.Loupe.desktop";
+      "inode/directory" = "org.gnome.Nautilus.desktop";
+    };
+  };
+}
+#+end_src
+
+** Development tools: home/dev.nix
+:PROPERTIES:
+:header-args:nix: :tangle home/dev.nix
+:END:
+
+Python (through uv) and the programs Emacs relies on. The language
+servers, formatters and dictionaries are not listed here: each is a
+=dev-tools= piece in the Emacs section that uses it (Python, web, Nix,
+LaTeX, spelling), so a tool and its Emacs configuration stay together.
+
+#+begin_src nix :noweb yes
+# GENERATED from config.org ("User: mathijs / Development tools"). Do not edit; edit config.org.
+# home/dev.nix: programming tools that Emacs and your projects use.
+# The language servers come from pkgs.unstable, to match Emacs 31 and
+# TypeScript 7 (chapter 13). Python projects use uv (chapter 10).
+{ pkgs, ... }:
+
+{
+  home.packages = with pkgs; [
+    # Python and web
+    python3 # quick scripts; projects use uv
+    uv
+    nodejs
+
+    # Tools used by the Emacs configuration; each group comes from the
+    # Emacs section in config.org that uses it.
+    <<dev-tools>>
+  ];
+
+  # uv: always use uv's own Python builds (they run through nix-ld, so binary
+  # wheels such as numpy find their libraries), never the nixpkgs python3
+  # above. Chapter 10.
+  home.sessionVariables.UV_PYTHON_PREFERENCE = "only-managed";
+}
+#+end_src
+
+** Emacs packaging: home/emacs.nix
+:PROPERTIES:
+:header-args:nix: :tangle home/emacs.nix
+:END:
+
+Nix installs Emacs 31 and every package named in a =use-package= form in
+the /generated/ =emacs/config.el=. The last block writes the *stub*
+=~/.emacs.d/init.el=: one line that loads =config.el= from the repository.
+
+#+begin_src nix
+# GENERATED from config.org ("User: mathijs / Emacs packaging"). Do not edit; edit config.org.
+# home/emacs.nix: Emacs 31 with the packages named in your configuration,
+# and the Emacs daemon. Chapter 9.
+{ pkgs, ... }:
+
+{
+  # Packages are read from the use-package forms in emacs/config.el (the
+  # tangled file, committed in the repository). After adding a package to
+  # config.org: save (tangles), rebuild, restart the daemon, commit.
+  # Emacs and its packages come from pkgs.unstable (chapter 13).
+  programs.emacs = {
+    enable = true;
+    package = pkgs.unstable.emacsWithPackagesFromUsePackage {
+      config = ../emacs/config.el;
+      package = pkgs.unstable.emacs-pgtk; # Wayland-native Emacs 31
+      alwaysEnsure = true; # use-package forms without :ensure nil are installed
+      extraEmacsPackages = epkgs: [
+        (epkgs.treesit-grammars.with-grammars (g: [
+          g.tree-sitter-python
+          g.tree-sitter-javascript
+          g.tree-sitter-css
+          g.tree-sitter-html
+          g.tree-sitter-json
+          g.tree-sitter-nix
+        ]))
+        epkgs.mu4e # mail in Emacs; used once email.nix is enabled
+      ];
+    };
+  };
+
+  # The Emacs daemon: starts with the graphical session;
+  # `emacsclient -c` (Mod+E in niri) opens a frame instantly.
+  services.emacs = {
+    enable = true;
+    client.enable = true; # adds an "Emacs (Client)" launcher entry
+    startWithUserSession = "graphical";
+    defaultEditor = true; # EDITOR=emacsclient for git, sudoedit, ...
+  };
+
+  # The stub init.el: loads the real configuration from the repository.
+  # It is the only Emacs file outside the repository (chapter 20).
+  home.file.".emacs.d/init.el".text = ''
+    ;;; init.el --- stub written by Home Manager -*- lexical-binding: t; -*-
+    (load (expand-file-name "~/dotfiles/emacs/config.el") nil 'nomessage)
+  '';
+}
+#+end_src
+
+** Desktop session: home/desktop.nix
+:PROPERTIES:
+:header-args:nix: :tangle home/desktop.nix
+:END:
+
+The pieces that turn niri into a desktop: two small scripts, the live
+link to niri's settings, the launcher, notifications, lock and idle, the
+tray applets and the look.
+
+#+begin_src nix
+# GENERATED from config.org ("User: mathijs / Desktop session"). Do not edit; edit config.org.
+# home/desktop.nix: the pieces that turn the niri compositor into a desktop.
+# Each block is one job from chapter 3; swap any of them independently.
+# They run as systemd user services tied to graphical-session.target, which
+# niri starts, so they come and go with your session. The bar: waybar.nix.
+{
+  config,
+  pkgs,
+  ...
+}:
+#+end_src
+
+*** Scripts
+
+=run-or-raise= focuses an app's window if it is open and starts it
+otherwise (=Mod+B=, =Mod+M=, =Mod+Shift+W=). =power-menu= is =Mod+X=.
+
+#+begin_src nix
+let
+  lock = "${pkgs.swaylock}/bin/swaylock -f";
+
+  # run-or-raise APP-ID COMMAND...: focus the window of that app if one is
+  # open, otherwise start the command. Used by niri's Mod+B (chapter 4.3).
+  run-or-raise = pkgs.writeShellApplication {
+    name = "run-or-raise";
+    runtimeInputs = [ pkgs.jq ];
+    text = ''
+      app="$1"; shift
+      id=$(niri msg --json windows \
+        | jq -r --arg app "$app" 'first(.[] | select(.app_id == $app) | .id) // empty')
+      if [ -n "$id" ]; then
+        niri msg action focus-window --id "$id"
+      else
+        exec "$@"
+      fi
+    '';
+  };
+
+  # power-menu: lock, suspend, log out, reboot or shut down, chosen in fuzzel.
+  # Bound to Mod+X in niri.
+  power-menu = pkgs.writeShellApplication {
+    name = "power-menu";
+    text = ''
+      choice=$(printf '%s\n' lock suspend logout reboot poweroff \
+        | fuzzel --dmenu --prompt "power: " --lines 5 --width 20) || exit 0
+      case "$choice" in
+        lock) loginctl lock-session ;;
+        suspend) systemctl suspend ;;
+        logout) niri msg action quit --skip-confirmation ;;
+        reboot) systemctl reboot ;;
+        poweroff) systemctl poweroff ;;
+      esac
+    '';
+  };
+in
+{
+#+end_src
+
+*** The link to niri's settings
+
+=~/.config/niri/config.kdl= is a link to the /generated/ file in the
+repository, not a copy in the Nix store. Saving =config.org= rewrites that
+file, and niri reloads it at once: no rebuild needed for niri.
+
+#+begin_src nix
+  # niri's own settings file (keybindings, layout, input, workspaces).
+  # Linked "out of store": ~/.config/niri/config.kdl points straight at the
+  # file in your repository, so edits take effect on save (niri reloads it)
+  # without a rebuild. Commit the file as usual.
+  xdg.configFile."niri/config.kdl".source =
+    config.lib.file.mkOutOfStoreSymlink "${config.home.homeDirectory}/dotfiles/home/niri/config.kdl";
+
+  home.packages = with pkgs; [
+    run-or-raise
+    power-menu
+    swaybg # wallpaper (started from niri's config)
+    wl-clipboard # wl-copy / wl-paste
+    brightnessctl # backlight keys
+    playerctl # media keys
+    pwvucontrol # volume mixer (PipeWire)
+    satty # annotate screenshots: wl-paste | satty -f -
+    wl-mirror # mirror the laptop screen to a projector (Mod+P in niri)
+    jq # used by the scripts and by niri msg --json
+    adwaita-icon-theme
+  ];
+#+end_src
+
+*** Launcher and notifications
+
+#+begin_src nix
+  # ---------------------------------------------------------------- Launcher
+  programs.fuzzel = {
+    enable = true;
+    settings = {
+      main = {
+        terminal = "alacritty -e";
+        font = "Inter:size=12";
+        width = 40;
+      };
+      colors = {
+        background = "1e1e2ef0";
+        text = "cdd6f4ff";
+        selection = "45475aff";
+        selection-text = "cdd6f4ff";
+        border = "89b4faff";
+      };
+    };
+  };
+
+  # ---------------------------------------------------------------- Notifications
+  services.mako = {
+    enable = true;
+    settings = {
+      default-timeout = 6000; # milliseconds
+      border-radius = 6;
+      background-color = "#1e1e2e";
+      text-color = "#cdd6f4";
+      border-color = "#89b4fa";
+      font = "Inter 11";
+    };
+  };
+#+end_src
+
+*** Lock and idle
+
+#+begin_src nix
+  # ---------------------------------------------------------------- Lock and idle
+  programs.swaylock = {
+    enable = true;
+    settings = {
+      color = "1e1e2e";
+      show-failed-attempts = true;
+      indicator-caps-lock = true;
+    };
+  };
+
+  services.swayidle = {
+    enable = true;
+    timeouts = [
+      { timeout = 300; command = lock; } # 5 min: lock
+      {
+        timeout = 330; # then switch the screens off
+        command = "${pkgs.niri}/bin/niri msg action power-off-monitors";
+      }
+    ];
+    events = {
+      before-sleep = lock; # lock before suspend
+      lock = lock; # `loginctl lock-session` locks too
+    };
+  };
+#+end_src
+
+*** Applets and helpers
+
+#+begin_src nix
+  # ---------------------------------------------------------------- Helpers
+  services.polkit-gnome.enable = true; # "enter your password" dialogs
+  services.cliphist.enable = true; # clipboard history (Mod+Shift+C in niri)
+  services.network-manager-applet.enable = true; # Wi-Fi menu in the tray
+  services.blueman-applet.enable = true; # Bluetooth menu in the tray
+  services.udiskie = {
+    enable = true; # auto-mount USB disks, with a tray icon to eject them
+    tray = "auto";
+  };
+  services.wlsunset = {
+    enable = true; # warmer screen colours in the evening
+    latitude = 52.1; # roughly the centre of the Netherlands; adjust
+    longitude = 5.3;
+  };
+#+end_src
+
+*** Look
+
+#+begin_src nix
+  # ---------------------------------------------------------------- Look
+  gtk = {
+    enable = true;
+    theme = {
+      name = "adw-gtk3-dark";
+      package = pkgs.adw-gtk3;
+    };
+  };
+  dconf.settings."org/gnome/desktop/interface".color-scheme = "prefer-dark";
+  home.pointerCursor = {
+    enable = true;
+    name = "Adwaita";
+    package = pkgs.adwaita-icon-theme;
+    size = 24;
+    gtk.enable = true;
+  };
+}
+#+end_src
+
+** Bar: home/waybar.nix
+:PROPERTIES:
+:header-args:nix: :tangle home/waybar.nix
+:END:
+
+Workspaces on the left, the clock in the middle, system information and the tray on the right. Each item is a Waybar /module/.
+
+#+begin_src nix
+# GENERATED from config.org ("User: mathijs / Bar"). Do not edit; edit config.org.
+# home/waybar.nix: the bar at the top of the screen. Every item is a
+# "module"; the three lists below decide which ones appear, and in what
+# order. Chapter 3.4 lists all modules and shows how to write your own.
+{ ... }:
+
+{
+  programs.waybar = {
+    enable = true;
+    systemd.enable = true; # started with the niri session, restarted on crash
+    settings.main = {
+      layer = "top";
+      position = "top";
+      height = 28;
+
+      # Workspaces only, no window titles or task list.
+      modules-left = [ "niri/workspaces" ];
+      modules-center = [ "clock" ];
+      modules-right = [
+        "cpu"
+        "memory"
+        "disk"
+        "temperature"
+        "pulseaudio"
+        "backlight"
+        "network"
+        "battery"
+        "power-profiles-daemon"
+        "tray"
+      ];
+
+      # Workspace buttons show the name of named workspaces ("web", "chat")
+      # and the number of the others.
+      "niri/workspaces".format = "{value}";
+
+      clock = {
+        format = "{:%a %d %b  %H:%M}";
+        tooltip-format = "<tt>{calendar}</tt>";
+      };
+
+      # System information. `interval` is in seconds.
+      cpu = {
+        format = "cpu {usage}%";
+        interval = 5;
+      };
+      memory = {
+        format = "mem {percentage}%";
+        tooltip-format = "{used:0.1f} of {total:0.1f} GiB in use, swap {swapUsed:0.1f} GiB";
+        interval = 10;
+      };
+      disk = {
+        path = "/";
+        format = "disk {free} free";
+        tooltip-format = "{used} of {total} used on {path} ({percentage_used}%)";
+        interval = 60;
+      };
+      temperature = {
+        # If this shows a strange value, pick the right sensor: see chapter 3.4.
+        format = "{temperatureC}°C";
+        critical-threshold = 85;
+        interval = 10;
+      };
+
+      pulseaudio = {
+        format = "vol {volume}%";
+        format-muted = "vol muted";
+        on-click = "pwvucontrol";
+      };
+      backlight.format = "light {percent}%";
+      network = {
+        format-wifi = "wifi {essid}";
+        format-ethernet = "wired";
+        format-disconnected = "offline";
+        tooltip-format = "{ifname} {ipaddr}";
+        on-click = "alacritty -e nmtui";
+      };
+      battery = {
+        format = "bat {capacity}%";
+        format-charging = "bat+ {capacity}%";
+        states = {
+          warning = 25;
+          critical = 10;
+        };
+      };
+      tray.spacing = 8;
+
+      # A module of your own: any command's output, refreshed regularly.
+      # Example, once mail is set up: unread messages in the work inbox.
+      # "custom/mail" = {
+      #   exec = "mu find flag:unread maildir:/work/Inbox 2>/dev/null | wc -l";
+      #   format = "mail {}";
+      #   interval = 120;
+      # };
+    };
+
+    style = ''
+      * { font-family: "Inter", "JetBrainsMono Nerd Font"; font-size: 13px; }
+      window#waybar { background: rgba(30, 30, 46, 0.92); color: #cdd6f4; }
+      #workspaces button { padding: 0 6px; color: #a6adc8; }
+      #workspaces button.active { color: #89b4fa; border-bottom: 2px solid #89b4fa; }
+      #clock, #cpu, #memory, #disk, #temperature, #pulseaudio, #backlight,
+      #network, #battery, #power-profiles-daemon, #tray { padding: 0 9px; }
+      #cpu, #memory, #disk, #temperature { color: #a6adc8; }
+      #temperature.critical, #battery.critical { color: #f38ba8; }
+      #battery.warning { color: #f9e2af; }
+    '';
+  };
+}
+#+end_src
+
+** niri: home/niri/config.kdl
+:PROPERTIES:
+:header-args:kdl: :tangle home/niri/config.kdl
+:END:
+
+niri's own settings, in its KDL format. Home Manager links =~/.config/niri/config.kdl= to the generated file (see [[*The link to niri's settings][the link]]), and niri reloads it whenever it changes: saving this Org file applies the change at once. A mistake shows a red banner and niri keeps the last good settings; =niri validate= checks the file.
+
+#+begin_src kdl
+// GENERATED from config.org ("User: mathijs / niri"). Do not edit; edit config.org.
+// niri configuration (KDL format). Home Manager links
+// ~/.config/niri/config.kdl to this file in your repository, and niri
+// reloads it on every save: changes apply at once, no rebuild needed.
+// A typo shows a red error banner and niri keeps the last good config.
+// Check it with:  niri validate
+// Full reference: https://yalter.github.io/niri/  (Configuration pages)
+// "Mod" is the Super (Windows) key; inside a nested window it becomes Alt.
+#+end_src
+
+*** Input
+
+Keyboard layout (the same as the system), touchpad and focus.
+
+#+begin_src kdl
+input {
+    keyboard {
+        xkb {
+            layout "us"
+            variant "altgr-intl"
+        }
+        numlock
+    }
+    touchpad {
+        tap
+        natural-scroll
+        dwt                      // disable while typing
+    }
+    focus-follows-mouse max-scroll-amount="0%"
+}
+#+end_src
+
+*** Displays and layout
+
+Gaps, column widths and the focus ring. Add an =output= line per screen once you know its name.
+
+#+begin_src kdl
+// Displays. List yours with `niri msg outputs`, then for example:
+// output "eDP-1" { scale 1.25; }
+
+layout {
+    gaps 12
+    center-focused-column "never"
+    preset-column-widths {      // Mod+R cycles through these
+        proportion 0.33333
+        proportion 0.5
+        proportion 0.66667
+    }
+    default-column-width { proportion 0.5; }
+    focus-ring {
+        width 3
+        active-color "#89b4fa"
+        inactive-color "#45475a"
+    }
+    border { off; }
+}
+#+end_src
+
+*** Workspaces
+
+Named workspaces always exist, in this order: "main" is 1, "web" is 2, "chat" is 3.
+
+#+begin_src kdl
+// Named workspaces (chapter 4.3). They always exist, in this order, at the
+// top of each monitor: "main" is workspace 1, "web" 2, "chat" 3. Unnamed
+// workspaces appear below them as needed. Mod+1, Mod+2, ... still work.
+workspace "main"
+workspace "web"
+workspace "chat"
+#+end_src
+
+*** Start-up and general
+
+#+begin_src kdl
+// Programs started with the session. The bar, notifications, idle/lock,
+// applets and the Emacs daemon are systemd user services from Home Manager,
+// so they are not listed here.
+spawn-at-startup "swaybg" "-c" "#313244"
+
+prefer-no-csd                   // ask apps not to draw their own title bars
+screenshot-path "~/Pictures/Screenshots/%Y-%m-%d %H-%M-%S.png"
+
+hotkey-overlay {
+    skip-at-startup             // Mod+Shift+/ shows the key list any time
+}
+#+end_src
+
+*** Where windows open
+
+Window rules send the browser to "web" and the chat programs (Signal, WhatsApp Web, Thunderbird) to "chat". A rule applies when a window opens; it matches the window's /app id/, which =niri msg windows= shows. WhatsApp Web gets its own app id, =whatsapp=, from the =whatsapp-web= launcher (see [[*Applications: home/apps.nix][Applications]]); that is what keeps it apart from ordinary LibreWolf windows, which go to "web".
+
+#+begin_src kdl
+// Where windows open. Find an app's id with `niri msg windows` while it runs.
+window-rule {
+    match app-id=r#"^(librewolf|firefox)$"#
+    open-on-workspace "web"
+}
+window-rule {
+    match app-id=r#"(?i)signal"#
+    match app-id=r#"^whatsapp$"#             // WhatsApp Web (whatsapp-web, apps.nix)
+    match app-id=r#"^thunderbird$"#
+    open-on-workspace "chat"
+}
+
+// Picture-in-picture videos float on top.
+window-rule {
+    match app-id=r#"^(librewolf|firefox)$"# title="^Picture-in-Picture$"
+    open-floating true
+}
+window-rule {
+    match app-id="com.saivert.pwvucontrol"
+    open-floating true
+}
+window-rule {
+    geometry-corner-radius 6
+    clip-to-geometry true
+}
+#+end_src
+
+*** Key bindings
+
+=Mod= is the Super (Windows) key. =Mod+Shift+/= shows this list on screen. =Mod+B=, =Mod+M= and =Mod+Shift+W= use =run-or-raise=: focus the window when it exists, start the program otherwise.
+
+#+begin_src kdl
+binds {
+    Mod+Shift+Slash { show-hotkey-overlay; }
+
+    // Launching
+    Mod+T hotkey-overlay-title="Terminal: Alacritty" { spawn "alacritty"; }
+    Mod+Shift+T hotkey-overlay-title="Terminal: foot" { spawn "foot"; }
+    Mod+D hotkey-overlay-title="Launcher: fuzzel" { spawn "fuzzel"; }
+    Mod+E hotkey-overlay-title="Emacs (client frame)" { spawn "emacsclient" "-c"; }
+    // Mod+B: go to the browser, starting it if needed (it opens on "web").
+    Mod+B hotkey-overlay-title="Browser (focus or start)" { spawn "run-or-raise" "librewolf" "librewolf"; }
+    Mod+Shift+B hotkey-overlay-title="New browser window" { spawn "librewolf" "--new-window"; }
+    Mod+M hotkey-overlay-title="Mail (focus or start)" { spawn "run-or-raise" "thunderbird" "thunderbird"; }
+    // Mod+Shift+W: WhatsApp Web in its own window (it opens on "chat").
+    Mod+Shift+W hotkey-overlay-title="WhatsApp (focus or start)" { spawn "run-or-raise" "whatsapp" "whatsapp-web"; }
+    Mod+X hotkey-overlay-title="Power menu" { spawn "power-menu"; }
+    Mod+N hotkey-overlay-title="Dismiss notifications" { spawn "makoctl" "dismiss" "--all"; }
+    Mod+Shift+N hotkey-overlay-title="Show last notification again" { spawn "makoctl" "restore"; }
+    Mod+Shift+C hotkey-overlay-title="Clipboard history" {
+        spawn-sh "cliphist list | fuzzel --dmenu | cliphist decode | wl-copy";
+    }
+    Super+Alt+L hotkey-overlay-title="Lock the screen" { spawn "swaylock"; }
+#+end_src
+
+*** Hardware keys
+
+#+begin_src kdl
+    // Volume, media and brightness keys (also work on the lock screen)
+    XF86AudioRaiseVolume allow-when-locked=true { spawn-sh "wpctl set-volume @DEFAULT_AUDIO_SINK@ 0.05+ -l 1.0"; }
+    XF86AudioLowerVolume allow-when-locked=true { spawn-sh "wpctl set-volume @DEFAULT_AUDIO_SINK@ 0.05-"; }
+    XF86AudioMute        allow-when-locked=true { spawn-sh "wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle"; }
+    XF86AudioMicMute     allow-when-locked=true { spawn-sh "wpctl set-mute @DEFAULT_AUDIO_SOURCE@ toggle"; }
+    XF86AudioPlay        allow-when-locked=true { spawn-sh "playerctl play-pause"; }
+    XF86AudioPrev        allow-when-locked=true { spawn-sh "playerctl previous"; }
+    XF86AudioNext        allow-when-locked=true { spawn-sh "playerctl next"; }
+    XF86MonBrightnessUp   allow-when-locked=true { spawn "brightnessctl" "--class=backlight" "set" "+10%"; }
+    XF86MonBrightnessDown allow-when-locked=true { spawn "brightnessctl" "--class=backlight" "set" "10%-"; }
+#+end_src
+
+*** Windows, columns and workspaces
+
+#+begin_src kdl
+    // Windows
+    Mod+Q repeat=false { close-window; }
+    Mod+O repeat=false { toggle-overview; }
+
+    // Moving focus: arrows or h/j/k/l. Columns are left/right,
+    // windows inside a column are up/down.
+    Mod+Left  { focus-column-left; }
+    Mod+Right { focus-column-right; }
+    Mod+Up    { focus-window-up; }
+    Mod+Down  { focus-window-down; }
+    Mod+H     { focus-column-left; }
+    Mod+L     { focus-column-right; }
+    Mod+K     { focus-window-up; }
+    Mod+J     { focus-window-down; }
+    Mod+Home  { focus-column-first; }
+    Mod+End   { focus-column-last; }
+
+    // Moving windows: add Ctrl
+    Mod+Ctrl+Left  { move-column-left; }
+    Mod+Ctrl+Right { move-column-right; }
+    Mod+Ctrl+Up    { move-window-up; }
+    Mod+Ctrl+Down  { move-window-down; }
+    Mod+Ctrl+H     { move-column-left; }
+    Mod+Ctrl+L     { move-column-right; }
+    Mod+Ctrl+K     { move-window-up; }
+    Mod+Ctrl+J     { move-window-down; }
+
+    // Stacking windows into one column and out again
+    Mod+BracketLeft  { consume-or-expel-window-left; }
+    Mod+BracketRight { consume-or-expel-window-right; }
+    Mod+W { toggle-column-tabbed-display; }
+
+    // Monitors: add Shift (focus) or Shift+Ctrl (move)
+    Mod+Shift+Left  { focus-monitor-left; }
+    Mod+Shift+Right { focus-monitor-right; }
+    Mod+Shift+Ctrl+Left  { move-column-to-monitor-left; }
+    Mod+Shift+Ctrl+Right { move-column-to-monitor-right; }
+
+    // Workspaces are stacked vertically per monitor
+    Mod+Page_Down      { focus-workspace-down; }
+    Mod+Page_Up        { focus-workspace-up; }
+    Mod+U              { focus-workspace-down; }
+    Mod+I              { focus-workspace-up; }
+    Mod+Ctrl+Page_Down { move-column-to-workspace-down; }
+    Mod+Ctrl+Page_Up   { move-column-to-workspace-up; }
+    Mod+Ctrl+U         { move-column-to-workspace-down; }
+    Mod+Ctrl+I         { move-column-to-workspace-up; }
+    Mod+1 { focus-workspace 1; }
+    Mod+2 { focus-workspace 2; }
+    Mod+3 { focus-workspace 3; }
+    Mod+4 { focus-workspace 4; }
+    Mod+5 { focus-workspace 5; }
+    Mod+Ctrl+1 { move-column-to-workspace 1; }
+    Mod+Ctrl+2 { move-column-to-workspace 2; }
+    Mod+Ctrl+3 { move-column-to-workspace 3; }
+    Mod+Ctrl+4 { move-column-to-workspace 4; }
+    Mod+Ctrl+5 { move-column-to-workspace 5; }
+    Mod+WheelScrollDown cooldown-ms=150 { focus-workspace-down; }
+    Mod+WheelScrollUp   cooldown-ms=150 { focus-workspace-up; }
+    Mod+Shift+WheelScrollDown { focus-column-right; }
+    Mod+Shift+WheelScrollUp   { focus-column-left; }
+#+end_src
+
+*** Sizes, floating windows and screenshots
+
+#+begin_src kdl
+    // Sizes
+    Mod+R       { switch-preset-column-width; }
+    Mod+F       { maximize-column; }
+    Mod+Shift+F { fullscreen-window; }
+    Mod+C       { center-column; }
+    Mod+Minus   { set-column-width "-10%"; }
+    Mod+Equal   { set-column-width "+10%"; }
+    Mod+Shift+Minus { set-window-height "-10%"; }
+    Mod+Shift+Equal { set-window-height "+10%"; }
+
+    // Floating windows
+    Mod+V       { toggle-window-floating; }
+    Mod+Shift+V { switch-focus-between-floating-and-tiling; }
+
+    // Screenshots (saved to ~/Pictures/Screenshots and copied)
+    Print      { screenshot; }
+    Ctrl+Print { screenshot-screen; }
+    Alt+Print  { screenshot-window; }
+#+end_src
+
+*** Projector and session
+
+The closing =}= ends the =binds= block opened above.
+
+#+begin_src kdl
+    // Projector: mirror the current screen into a window; move that window
+    // to the projector and make it fullscreen (Mod+Shift+F).
+    Mod+P repeat=false hotkey-overlay-title="Mirror this screen (wl-mirror)" {
+        spawn-sh "wl-mirror $(niri msg --json focused-output | jq -r .name)";
+    }
+
+    // Session
+    Mod+Escape allow-inhibiting=false { toggle-keyboard-shortcuts-inhibit; }
+    Mod+Shift+P { power-off-monitors; }
+    Mod+Shift+E { quit; }
+    Ctrl+Alt+Delete { quit; }
+}
+#+end_src
+
+** E-mail in Emacs (optional): home/email.nix
+:PROPERTIES:
+:header-args:nix: :tangle home/email.nix
+:END:
+
+Not used until =./email.nix= is uncommented in [[*Entry point: home/home.nix][home.nix]]. Read chapter 1 of the PDF first: the school must allow IMAP/SMTP and the OAuth client ID. The file is generated either way; an unused file does no harm.
+
+#+begin_src nix
+# GENERATED from config.org ("User: mathijs / E-mail"). Do not edit; edit config.org.
+# home/email.nix: work mail (Microsoft 365) in Emacs, without DavMail.
+#   oama   - gets and renews the OAuth2 token after one browser login
+#   mbsync - synchronises the mailbox to ~/Mail over IMAP (XOAUTH2)
+#   msmtp  - sends mail over SMTP (XOAUTH2)
+#   mu     - indexes ~/Mail; mu4e is its Emacs interface
+# Enable it by uncommenting ./email.nix in home.nix, after reading chapter 1:
+# the school's Microsoft 365 tenant must allow IMAP/SMTP for your account and
+# the OAuth client ID you use. Check with IT before relying on it. The
+# sign-in itself (SURFconext, tiqr) happens once in the browser (chapter 1.3).
+{ config, pkgs, ... }:
+
+let
+  address = "m.janssen@uva.nl"; # your work address
+in
+{
+  home.packages = [ pkgs.oama ];
+
+  # oama's settings. Replace CLIENT-ID with the ID of an app registration
+  # your tenant allows (see chapter 1). Tokens are kept in gnome-keyring.
+  xdg.configFile."oama/config.yaml".text = ''
+    encryption:
+      tag: KEYRING
+    services:
+      microsoft:
+        client_id: CLIENT-ID
+  '';
+
+  accounts.email = {
+    maildirBasePath = "Mail";
+    accounts.work = {
+      primary = true;
+      inherit address;
+      userName = address;
+      realName = "Mathijs";
+      flavor = "outlook.office365.com"; # IMAP and SMTP server settings
+      passwordCommand = "${pkgs.oama}/bin/oama access ${address}";
+
+      mbsync = {
+        enable = true;
+        create = "maildir"; # create folders locally that exist on the server
+        expunge = "both";
+        extraConfig.account.AuthMechs = "XOAUTH2";
+      };
+      msmtp = {
+        enable = true;
+        extraConfig.auth = "xoauth2";
+      };
+      mu.enable = true;
+    };
+  };
+
+  programs.mbsync = {
+    enable = true;
+    # isync with the SASL XOAUTH2 plugin, needed for Microsoft 365
+    package = pkgs.isync.override { withCyrusSaslXoauth2 = true; };
+  };
+  programs.msmtp.enable = true;
+  programs.mu.enable = true;
+
+  # Fetch mail every 5 minutes, then update mu's index.
+  services.mbsync = {
+    enable = true;
+    package = config.programs.mbsync.package;
+    frequency = "*:0/5";
+    postExec = "${pkgs.mu}/bin/mu index";
+  };
+}
+#+end_src
+
+* User: work (optional)
+:PROPERTIES:
+:header-args:nix: :tangle home/work.nix
+:END:
+
+A second account for work (PDF, chapter 6.10). It is switched on in two places in [[*Users][System → Users]] and [[*Home Manager][System → Home Manager]]. It reuses most of my modules but not my private applications, mail or browser profile. It cannot read my home folder, so it gets /copies/ of niri's settings and of =config.el= from the Nix store; they change when I rebuild.
+
+#+begin_src nix
+# GENERATED from config.org ("User: work"). Do not edit; edit config.org.
+# home/work.nix: an OPTIONAL second account for work (chapter 6.10). Not used
+# until you enable it in nixos/configuration.nix. It shares the desktop,
+# shell, Emacs and tools with your own account, but not your private apps,
+# browser profile, mail, keyring or files.
+{ lib, pkgs, ... }:
+
+{
+  imports = [
+    ./shell.nix
+    ./terminal.nix
+    ./browser.nix
+    ./dev.nix
+    ./emacs.nix
+    ./desktop.nix
+    ./waybar.nix
+  ];
+
+  home.packages = with pkgs; [
+    thunderbird
+    libreoffice
+  ];
+
+  programs.git.settings.user.email = lib.mkForce "you@school.example";
+
+  # This account cannot read ~mathijs/dotfiles (home folders are private),
+  # so it uses copies of niri's and Emacs's configuration from the Nix store.
+  # They update when you rebuild.
+  xdg.configFile."niri/config.kdl".source = lib.mkForce ./niri/config.kdl;
+  home.file.".emacs.d/init.el".text = lib.mkForce ''
+    ;;; init.el --- stub written by Home Manager -*- lexical-binding: t; -*-
+    (load "${../emacs/config.el}" nil 'nomessage)
+  '';
+
+  xdg.enable = true;
+  xdg.userDirs = {
+    enable = true;
+    createDirectories = true;
+  };
+  home.stateVersion = "26.05";
+}
+#+end_src
+
+* Emacs: emacs/config.el
+
+Every =emacs-lisp= block below is written to =emacs/config.el=, in this
+order. The same =config.el= runs on NixOS and on the Windows work laptop.
+
+** About the Emacs configuration
+
+My Emacs configuration. The prose explains /why/; the =emacs-lisp= blocks
+are the configuration itself. They all go to =emacs/config.el= (set at the
+top of this file). A few =nix= blocks in between name the external tools
+a feature needs; they are pieces of the package list in
+[[*Development tools: home/dev.nix][home/dev.nix]] and do not end up in
+=config.el=.
+
+*** How it is loaded
+
+- This file (=config.org=, at the top of the dotfiles repository) and its
+  tangled output (=emacs/config.el=) live in my dotfiles repository on
+  GitHub.
+- Each machine has a small *stub* =init.el= in its Emacs directory that
+  only loads =config.el= from the repository (see [[*The stub][The stub]]).
+- Saving this file automatically *tangles* it: every =emacs-lisp= block is
+  written, in order, to =emacs/config.el=, and the Nix and niri blocks to
+  their files (see [[*Tangle on save][Tangle on save]]).
+- =config.el= is committed too, so a fresh machine (and Nix) can use it
+  without running Org first. Never edit =config.el= by hand: edits are
+  overwritten at the next save of this file.
+
+*** The stub
+
+Not tangled; this is what the stub on each machine looks like. It only
+loads =emacs/config.el=; the path differs per machine. Everything else,
+including where Customize writes, is handled in this file. The stub does
+not change now that =config.org= has moved to the top of the repository:
+it points at =config.el=, which stayed where it was.
+
+#+begin_src emacs-lisp :tangle no
+;; -*- lexical-binding: t; -*-
+;; .emacs.d/init.el (the stub; not in git; path differs per machine)
+(load "C:/Users/moiss/Documents/dotfiles/emacs/config.el")
+#+end_src
+
+On Windows the stub lives in =%APPDATA%\.emacs.d\init.el= (or
+=~/.emacs.d/init.el=); on NixOS Home Manager writes it (see
+[[*Emacs packaging: home/emacs.nix][Emacs packaging]]).
+
+*** Two machines, one file
+
+- *NixOS*: Nix installs Emacs, every package named in a =use-package= form,
+  the tree-sitter grammars and the external tools (the =dev-tools= pieces
+  in this section). Nothing is downloaded.
+- *Windows work laptop*: =package.el= downloads packages from GNU ELPA and
+  MELPA; Scoop, uv and npm provide the external tools.
+
+Requires Emacs 30 or newer. Blocks marked *[NixOS]* only activate where
+their dependencies exist; Windows skips them.
+
+Those blocks are wrapped in =(unless MJ-windows-p ...)= rather than using
+=use-package='s =:if=: with =:if=, =use-package= still /downloads/ the
+package (=:ensure= runs before =:if= is checked) and only skips configuring
+it. Wrapping the whole form means Windows never installs them. Nix's
+package scan finds =use-package= forms inside =unless= as well.
+
+** Header and startup
+
+The first line of =config.el= must carry the =lexical-binding= cookie, so
+it is the first line of the first block.
+
+#+begin_src emacs-lisp
+;;; config.el --- tangled from config.org; do not edit  -*- lexical-binding: t; -*-
+#+end_src
+
+Language servers send large JSON messages; these settings keep Emacs
+responsive. They used to sit inside the lsp-mode block, but they help all
+of Emacs. =inhibit-compacting-font-caches= avoids stutter with many fonts on
+Windows.
+
+#+begin_src emacs-lisp
+(setq gc-cons-threshold (* 100 1024 1024)
+      read-process-output-max (* 1024 1024)
+      inhibit-compacting-font-caches t)
+#+end_src
+
+** Platform detection and packages
+
+=MJ-nix-p= checks where an installed package actually lives: inside
+=/nix/store= means Nix built it, so =package.el= must not download anything.
+
+#+begin_src emacs-lisp
+(defconst MJ-windows-p (eq system-type 'windows-nt)
+  "Non-nil on Windows.")
+
+(defconst MJ-nix-p
+  (let ((lib (locate-library "vertico")))
+    (and lib (string-prefix-p "/nix/store/" (file-truename lib))))
+  "Non-nil when the Emacs packages are provided by Nix.")
+#+end_src
+
+On Windows, package signatures are checked with Scoop's native gpg rather
+than the Unix-style one bundled with Git.
+
+#+begin_src emacs-lisp
+(require 'package)
+
+(let ((gpg (and MJ-windows-p
+                (substitute-in-file-name "$USERPROFILE/scoop/shims/gpg.exe"))))
+  (when (and gpg (file-exists-p gpg))
+    (setq epg-gpg-program gpg)))
+
+(add-to-list 'package-archives '("melpa" . "https://melpa.org/packages/") t)
+(package-initialize)          ; harmless on Nix; ensures activation elsewhere
+
+(require 'use-package)
+(setq use-package-always-ensure (not MJ-nix-p))
+#+end_src
+
+On Windows, =find= on =PATH= is Windows' own =find.exe=, an unrelated
+text-search tool. Emacs (project.el, and through it eglot) expects GNU
+=find= to list a project's files when the folder is not a git repository;
+with the Windows one, listing fails ("FIND: Parameter format not correct")
+and language servers can crash. Git for Windows ships GNU =find=, so Emacs
+is pointed at it. Project-wide search (=project-find-regexp=, xref) uses
+ripgrep instead of Unix =grep= on both machines.
+
+#+begin_src emacs-lisp
+(when MJ-windows-p
+  (let ((gnu-find (seq-find #'file-exists-p
+                            (list (substitute-in-file-name
+                                   "$USERPROFILE/scoop/apps/git/current/usr/bin/find.exe")
+                                  "C:/Program Files/Git/usr/bin/find.exe"))))
+    (when gnu-find
+      (setq find-program gnu-find))))
+
+(setq xref-search-program 'ripgrep)
+#+end_src
+
+Customize writes to its own file in the Emacs directory, never into the
+repository or the stub (on NixOS the stub is read-only). It is set here,
+early, so Customize knows where to write; the file itself is loaded at the
+very end (see [[*Customize settings (loaded last)][Customize settings]]),
+so choices made through Customize win over the defaults in this file.
+
+#+begin_src emacs-lisp
+(setq custom-file (locate-user-emacs-file "custom.el"))
+#+end_src
+
+** Editing this configuration
+
+*** Opening it
+
+=C-c i= opens this Org file. =MJ-config-file= is computed from where
+=config.el= was loaded, so it works wherever the repository is cloned:
+=config.el= is in the repository's =emacs/= folder, =config.org= one level
+up.
+
+#+begin_src emacs-lisp
+(defconst MJ-config-file
+  (expand-file-name "../config.org"
+                    (file-name-directory (or load-file-name buffer-file-name)))
+  "The literate configuration (config.org) in the dotfiles repository.")
+
+(defun MJ-open-init-file ()
+  "Open the real configuration (config.org)."
+  (interactive)
+  (find-file MJ-config-file))
+
+(global-set-key (kbd "C-c i") #'MJ-open-init-file)
+#+end_src
+
+*** Tangle on save
+
+Saving =config.org= rewrites every generated file: =emacs/config.el=, the
+Nix files and niri's settings. Only this file is affected; other Org files
+are left alone. After tangling, =M-x eval-buffer= in =config.el=, or =C-c
+C-c= on a single block here, applies Emacs changes without restarting;
+Nix changes need a =rebuild=.
+
+The generated files are always written with Unix line endings
+(=utf-8-unix=), also on Windows, so they are identical on both machines
+and git never sees a whole file change because of line endings.
+
+#+begin_src emacs-lisp
+(defun MJ-tangle-config ()
+  "Tangle the configuration when `MJ-config-file' is saved."
+  (when (and buffer-file-name
+             (string= (file-truename buffer-file-name)
+                      (file-truename MJ-config-file)))
+    (let ((coding-system-for-write 'utf-8-unix))
+      (org-babel-tangle))))
+
+(add-hook 'org-mode-hook
+          (lambda () (add-hook 'after-save-hook #'MJ-tangle-config nil t)))
+#+end_src
+
+** General behaviour
+
+All built in.
+
+#+begin_src emacs-lisp
+(setq inhibit-startup-message t
+      use-short-answers t        ; y/n instead of yes/no everywhere
+      history-length 25
+      global-auto-revert-non-file-buffers t)
+
+(tool-bar-mode -1)
+(recentf-mode 1)
+(savehist-mode 1)
+(save-place-mode 1)
+(global-auto-revert-mode 1)
+(repeat-mode 1)                  ; e.g. C-x o o o keeps switching windows
+#+end_src
+
+Auto-close brackets in code. Emacs Lisp uses paredit instead (see
+[[*Emacs Lisp][Emacs Lisp]]).
+
+#+begin_src emacs-lisp
+(add-hook 'prog-mode-hook #'electric-pair-local-mode)
+#+end_src
+
+*** General Keybindings
+
+Switching to newly opened windows:
+
+#+begin_src emacs-lisp
+(defun my-split-window-right ()
+  "Split window with another buffer."
+  (interactive)
+  (select-window (split-window-right))
+  (switch-to-buffer (other-buffer)))
+
+(global-set-key (kbd "C-x 3") #'my-split-window-right)
+
+(defun my-split-window-below ()
+  "Split window with another buffer."
+  (interactive)
+  (select-window (split-window-below))
+  (switch-to-buffer (other-buffer)))
+
+(global-set-key (kbd "C-x 2") #'my-split-window-below)
+#+end_src
+
+#+RESULTS:
+: my-split-window-below
+
+** Appearance
+
+#+begin_src emacs-lisp
+(load-theme 'deeper-blue t)
+;; Built-in alternative worth trying: (load-theme 'modus-vivendi t)
+
+(global-display-line-numbers-mode 1)
+(setq display-line-numbers-type 'relative)
+(dolist (hook '(shell-mode-hook eshell-mode-hook term-mode-hook
+                eat-mode-hook pdf-view-mode-hook))
+  (add-hook hook (lambda () (display-line-numbers-mode 0))))
+#+end_src
+
+Indentation guides; they use the tree-sitter syntax tree where a grammar is
+loaded.
+
+#+begin_src emacs-lisp
+(use-package indent-bars
+  :hook ((prog-mode web-mode) . indent-bars-mode)
+  :custom
+  (indent-bars-treesit-support (and (fboundp 'treesit-available-p)
+                                    (treesit-available-p))))
+#+end_src
+
+** Key discovery
+
+which-key is built into Emacs 30, so nothing is installed (=:ensure nil=).
+
+#+begin_src emacs-lisp
+(use-package which-key
+  :ensure nil
+  :config (which-key-mode))
+#+end_src
+
+** Minibuffer completion
+
+Vertical candidate lists (vertico), matching words in any order
+(orderless), annotations (marginalia), better search and jump commands
+(consult), and acting on candidates (embark). File names still complete
+path-wise (=/u/s/l= → =/usr/share/local=).
+
+#+begin_src emacs-lisp
+(use-package vertico
+  :init (vertico-mode))
+
+(use-package orderless
+  :custom
+  (completion-styles '(orderless basic))
+  (completion-category-overrides '((file (styles basic partial-completion)))))
+
+(use-package marginalia
+  :init (marginalia-mode))
+
+(use-package consult
+  :bind (("C-s"   . consult-line)
+         ("C-c f" . consult-ripgrep)          ; needs ripgrep
+         ("C-x b" . consult-buffer))
+  :init
+  ;; "Find references" and "go to definition" results through consult.
+  (setq xref-show-xrefs-function #'consult-xref
+        xref-show-definitions-function #'consult-xref))
+
+(use-package embark
+  :bind (("C-." . embark-act))
+  :init (setq prefix-help-command #'embark-prefix-help-command))
+
+(use-package embark-consult
+  :after (embark consult))
+#+end_src
+
+** In-buffer completion
+
+corfu replaces company: the same automatic pop-up, built on Emacs's own
+completion system, which eglot, AUCTeX, Org and cape all feed. =cape-file=
+replaces =company-files=.
+
+#+begin_src emacs-lisp
+(use-package corfu
+  :init (global-corfu-mode)
+  :custom
+  (corfu-auto t)
+  (corfu-auto-prefix 2)
+  (corfu-cycle t))
+
+(use-package cape
+  :init (add-hook 'completion-at-point-functions #'cape-file))
+#+end_src
+
+** Projects and git
+
+The built-in project.el replaces projectile; eglot and consult use it
+natively. The old =C-c p= prefix is kept (=C-x p= works too).
+
+#+begin_src emacs-lisp
+(use-package project
+  :ensure nil
+  :bind-keymap ("C-c p" . project-prefix-map))
+
+(use-package magit
+  :bind ("C-x g" . magit-status))
+#+end_src
+
+** Tree-sitter
+
+*** Grammars
+
+- *NixOS*: grammars come from Nix (home.nix); nothing to do here.
+- *Windows*: install a C compiler once (=scoop install mingw=), then
+  =M-x MJ-treesit-install-missing=.
+
+If a grammar fails to load with an ABI/version error, it is newer than
+this Emacs supports: add a release tag as third element of its entry and
+reinstall.
+
+#+begin_src emacs-lisp
+(setq treesit-language-source-alist
+      '((python     "https://github.com/tree-sitter/tree-sitter-python")
+        (javascript "https://github.com/tree-sitter/tree-sitter-javascript" nil "src")
+        (css        "https://github.com/tree-sitter/tree-sitter-css")
+        (html       "https://github.com/tree-sitter/tree-sitter-html")
+        (json       "https://github.com/tree-sitter/tree-sitter-json")
+        (nix        "https://github.com/nix-community/tree-sitter-nix")))
+
+(defun MJ-treesit-ready-p (lang)
+  "Return non-nil if tree-sitter and the grammar for LANG are available."
+  (and (fboundp 'treesit-available-p)
+       (treesit-available-p)
+       (treesit-language-available-p lang)))
+
+(defun MJ-treesit-install-missing ()
+  "Install every grammar in `treesit-language-source-alist' not yet present.
+Needs git and a C compiler on PATH."
+  (interactive)
+  (dolist (entry treesit-language-source-alist)
+    (unless (treesit-language-available-p (car entry))
+      (treesit-install-language-grammar (car entry)))))
+#+end_src
+
+*** Switching to tree-sitter modes
+
+A tree-sitter mode is used only where its grammar exists, so a machine
+without grammars silently keeps the classic modes. HTML stays on web-mode
+(reveal.js files mix HTML, CSS and JavaScript, which =html-ts-mode= cannot
+yet handle); LaTeX stays on AUCTeX.
+
+#+begin_src emacs-lisp
+(dolist (m '((python-mode     python-ts-mode python)
+             (js-mode         js-ts-mode     javascript)
+             (javascript-mode js-ts-mode     javascript)
+             (css-mode        css-ts-mode    css)
+             (js-json-mode    json-ts-mode   json)))
+  (when (MJ-treesit-ready-p (nth 2 m))
+    (add-to-list 'major-mode-remap-alist (cons (nth 0 m) (nth 1 m)))))
+#+end_src
+
+Hooks further down use the /base/ modes (=python-base-mode=,
+=js-base-mode=, =css-base-mode=): both the classic and the tree-sitter mode
+derive from them, so every setting works either way.
+
+** Language servers (eglot)
+
+eglot is built in and replaces lsp-mode, lsp-pyright and lsp-latex. A
+helper starts eglot only when the server is actually on =PATH=, so a
+machine without a given server simply skips it.
+
+The lsp-mode indentation workaround (issue #2915, the =lsp--get-indent-width=
+advice and the =tab-width= hook) is gone: eglot never drives indentation,
+so web-mode's own offsets always apply.
+
+*File watching on Windows.* Language servers can ask the editor to watch
+folders for changes. basedpyright asks to watch the project /and the whole
+Python installation/; on Windows eglot cannot set up that many watches,
+replies with an error, and basedpyright crashes on that error ("Not
+auto-reconnecting, last one didn't last long"). On Windows, eglot therefore
+accepts such requests without watching. Cost: files created or renamed
+outside Emacs are noticed after reopening the file or =M-x
+eglot-reconnect=.
+
+*JavaScript and TypeScript.* TypeScript 7 (July 2026) is a native rewrite
+with its own language server, started as =tsc --lsp --stdio=; it no longer
+ships the =tsserver.js= that the separate typescript-language-server
+needs. =MJ-js-server= asks =tsc --version= when a JavaScript file is
+opened and picks =tsc --lsp= for version 7 or later, and
+typescript-language-server for older versions (for example an older
+package set on NixOS). Installing =typescript= (=npm install -g
+typescript=) is enough on Windows.
+
+*Unsupported optional features.* Some servers offer features eglot does
+not support, and eglot warns about each ("Server tried to register
+unsupported capability ..."). Two such offers are accepted silently: the
+HTML server's =workspace/didChangeWorkspaceFolders= (tracking several
+project folders; one is all I need) and TypeScript 7's
+=workspace/didChangeConfiguration= (eglot sends its settings at startup
+anyway).
+
+*Mode-line indicator.* eglot's indicator uses a green that is unreadable
+with deeper-blue; it now uses the mode line's own emphasis style.
+
+*Type-checking level.* basedpyright's default mode is strict: it warns
+about every missing type annotation, which is noise for beginners' code
+and teaching material. "standard" matches plain pyright. Switch per project
+with a =[tool.basedpyright]= section in =pyproject.toml= if wanted.
+
+#+begin_src emacs-lisp
+(defun MJ-eglot-ensure-if (program)
+  "Return a hook function that starts eglot only if PROGRAM is on PATH."
+  (lambda ()
+    (when (executable-find program)
+      (eglot-ensure))))
+
+(defun MJ-js-server (&optional _interactive)
+  "Return the command for the JavaScript/TypeScript language server.
+TypeScript 7 and later contain their own server (`tsc --lsp --stdio');
+older versions need the separate typescript-language-server."
+  (let ((version (ignore-errors (car (process-lines "tsc" "--version")))))
+    (if (and version
+             (string-match "Version \\([0-9]+\\)" version)
+             (>= (string-to-number (match-string 1 version)) 7))
+        '("tsc" "--lsp" "--stdio")
+      '("typescript-language-server" "--stdio"))))
+
+(use-package eglot
+  :ensure nil
+  :bind (:map eglot-mode-map
+              ("C-c r" . eglot-rename)          ; same key as with lsp-mode
+              ("C-c a" . eglot-code-actions))
+  :custom (eglot-autoshutdown t)
+  :config
+  (add-to-list 'eglot-server-programs
+               '((python-mode python-ts-mode) . ("basedpyright-langserver" "--stdio")))
+  (add-to-list 'eglot-server-programs
+               '((web-mode :language-id "html") . ("vscode-html-language-server" "--stdio")))
+  (add-to-list 'eglot-server-programs
+               '((LaTeX-mode :language-id "latex") . ("texlab")))
+  (add-to-list 'eglot-server-programs
+               '(nix-ts-mode . ("nil")))
+  ;; [Windows] Accept file-watch requests without watching (see above).
+  (when MJ-windows-p
+    (cl-defmethod eglot-register-capability
+      (_server (_method (eql 'workspace/didChangeWatchedFiles)) _id &rest _)
+      "Ignore file-watching requests on Windows."
+      nil))
+  ;; JavaScript/TypeScript: the server is chosen when a file is opened
+  ;; (see MJ-js-server above).
+  (add-to-list 'eglot-server-programs
+               '(((js-mode            :language-id "javascript")
+                  (js-ts-mode         :language-id "javascript")
+                  (tsx-ts-mode        :language-id "typescriptreact")
+                  (typescript-ts-mode :language-id "typescript")
+                  (typescript-mode    :language-id "typescript"))
+                 . MJ-js-server))
+  ;; Accept, silently, two optional features some servers offer but eglot
+  ;; does not need (see above).
+  (cl-defmethod eglot-register-capability
+    (_server (_method (eql 'workspace/didChangeWorkspaceFolders)) _id &rest _)
+    "Ignore workspace-folder registration (single-folder projects)."
+    nil)
+  (cl-defmethod eglot-register-capability
+    (_server (_method (eql 'workspace/didChangeConfiguration)) _id &rest _)
+    "Ignore configuration-change registration (eglot sends settings anyway)."
+    nil)
+  ;; Readable eglot indicator in the mode line, whatever the theme.
+  (set-face-attribute 'eglot-mode-line nil :inherit 'mode-line-emphasis))
+
+;; basedpyright: "standard" type checking instead of its strict default.
+(setq-default eglot-workspace-configuration
+              '(:basedpyright (:analysis (:typeCheckingMode "standard"))))
+
+(add-hook 'python-base-mode-hook (MJ-eglot-ensure-if "basedpyright-langserver"))
+(add-hook 'js-base-mode-hook     (MJ-eglot-ensure-if "tsc"))
+(add-hook 'css-base-mode-hook    (MJ-eglot-ensure-if "vscode-css-language-server"))
+(add-hook 'web-mode-hook         (MJ-eglot-ensure-if "vscode-html-language-server"))
+(add-hook 'LaTeX-mode-hook       (MJ-eglot-ensure-if "texlab"))
+(add-hook 'nix-ts-mode-hook      (MJ-eglot-ensure-if "nil"))
+#+end_src
+
+Errors and warnings appear through the built-in flymake.
+
+#+begin_src emacs-lisp
+(use-package flymake
+  :ensure nil
+  :bind (:map flymake-mode-map
+              ("M-n" . flymake-goto-next-error)
+              ("M-p" . flymake-goto-prev-error)))
+#+end_src
+
+** Snippets
+
+eglot uses yasnippet automatically for snippet-style completions.
+
+#+begin_src emacs-lisp
+(use-package yasnippet
+  :init (yas-global-mode 1))
+
+(use-package yasnippet-snippets)
+#+end_src
+
+** Formatting (Apheleia)
+
+Apheleia formats buffers on save: ruff for Python (replacing black: same
+style, much faster), Prettier for HTML/CSS/JS. It replaced blacken and
+prettier-js; prettier-js never worked reliably on Windows here, for reasons
+that weren't pinned down.
+
+*How it works.* Apheleia sends the buffer's contents to the formatter in
+the background, then runs the external =diff= program to compare the
+original and formatted text, and applies only the changes. This keeps
+point, marks and undo history intact, and skips the update if you edited
+the buffer in the meantime.
+
+*External requirements* (all on =exec-path=):
+- =diff= (on Windows: Scoop's diffutils or Git's =usr/bin=);
+- =bash= on Windows, because Apheleia runs Prettier through a bundled bash
+  script, "apheleia-npx" (Git for Windows' bash works);
+- Prettier (=npm install -g prettier=) and ruff (=uv tool install ruff=;
+  on NixOS from home.nix).
+
+*Troubleshooting.* Apheleia fails silently. If saving doesn't format, run
+=M-x apheleia-goto-error= right after saving to see the formatter's output.
+Prettier honours =.prettierignore= files in the project and its parent
+folders; a project-level one (e.g. reveal.js's own, which excludes all
+=*.html=) makes Prettier report success while changing nothing. Check with
+=prettier --file-info <file>=.
+
+#+begin_src emacs-lisp
+(use-package apheleia
+  :hook ((python-base-mode js-base-mode css-base-mode web-mode) . apheleia-mode)
+  :config
+  (setf (alist-get 'python-mode apheleia-mode-alist) 'ruff
+        (alist-get 'python-ts-mode apheleia-mode-alist) 'ruff))
+#+end_src
+
+** Debugging (dape)
+
+dape replaces dap-mode. It talks to debugpy directly and does not depend on
+the LSP client. Usage: =uv add --dev debugpy= in the project, then =M-x
+dape= and choose =debugpy=; toggle breakpoints with =M-x
+dape-breakpoint-toggle=.
+
+#+begin_src emacs-lisp
+(use-package dape
+  :commands dape
+  :custom (dape-buffer-window-arrangement 'right))
+#+end_src
+
+** Emacs Lisp
+
+paredit keeps parentheses balanced; aggressive-indent keeps code indented.
+electric-pair is switched off here to avoid double bracket handling.
+
+#+begin_src emacs-lisp
+(use-package aggressive-indent
+  :hook (emacs-lisp-mode . aggressive-indent-mode))
+
+(use-package paredit
+  :hook (emacs-lisp-mode . paredit-mode))
+
+(add-hook 'emacs-lisp-mode-hook (lambda () (electric-pair-local-mode -1)))
+#+end_src
+
+** Python
+
+- Language server: basedpyright, via eglot.
+- Formatter: ruff, via Apheleia.
+- Linting: ruff, via flymake-ruff (unused imports, undefined names, style).
+- Environment: envrc puts the project's =.venv= on =PATH= (NixOS).
+
+*[Nix]* The language server and formatter, for home/dev.nix:
+
+#+begin_src nix :noweb-ref dev-tools
+# Python (config.org: Emacs / Python)
+unstable.basedpyright
+unstable.ruff
+#+end_src
+
+#+begin_src emacs-lisp
+(use-package flymake-ruff
+  :hook (eglot-managed-mode . (lambda ()
+                                (when (and (derived-mode-p 'python-base-mode)
+                                           (executable-find "ruff"))
+                                  (flymake-ruff-load)))))
+#+end_src
+
+code-cells turns =# %%= comments into notebook-style cells (=C-c C-c=
+sends a cell to the Python REPL) and opens =.ipynb= files as plain
+scripts via jupytext.
+
+#+begin_src nix :noweb-ref dev-tools
+# Notebooks as scripts (config.org: Emacs / Python)
+python3Packages.jupytext
+#+end_src
+
+#+begin_src emacs-lisp
+(use-package code-cells
+  :hook (python-base-mode . code-cells-mode-maybe)
+  :bind (:map code-cells-mode-map
+              ("C-c C-c" . code-cells-eval)))
+#+end_src
+
+** HTML, CSS and JavaScript (reveal.js)
+
+web-mode stays for HTML. CSS and JavaScript use the tree-sitter modes
+(=js-ts-mode= replaces js2-mode), configured through their shared
+packages =css-mode= and =js=. All indent by two spaces.
+
+*[Nix]* The language servers (TypeScript 7 includes its own) and
+Prettier, for home/dev.nix:
+
+#+begin_src nix :noweb-ref dev-tools
+# HTML, CSS, JavaScript (config.org: Emacs / HTML, CSS and JavaScript)
+unstable.typescript # tsc --lsp (TypeScript 7)
+unstable.vscode-langservers-extracted # HTML/CSS servers
+unstable.prettier
+#+end_src
+
+#+begin_src emacs-lisp
+(use-package web-mode
+  :mode ("\\.html?\\'" . web-mode)
+  :hook (web-mode . (lambda () (setq indent-tabs-mode nil)))
+  :custom
+  (web-mode-markup-indent-offset 2)      ; HTML tags
+  (web-mode-css-indent-offset 2)         ; embedded <style>
+  (web-mode-code-indent-offset 2))       ; embedded <script>
+
+(use-package css-mode
+  :ensure nil
+  :custom (css-indent-offset 2))
+
+(use-package js
+  :ensure nil
+  :custom (js-indent-level 2))
+#+end_src
+
+Emmet expands abbreviations such as =ul>li*5= into markup, now also in the
+tree-sitter CSS mode.
+
+#+begin_src emacs-lisp
+(use-package emmet-mode
+  :hook ((web-mode css-base-mode) . emmet-mode)
+  :custom (emmet-use-style-tag-and-attr-detection t)
+  :config (add-to-list 'emmet-css-major-modes 'css-ts-mode))
+#+end_src
+
+** Nix
+
+nix-ts-mode for =.nix= files (also for =C-c '= on the Nix blocks in this
+file), with the =nil= language server.
+
+#+begin_src nix :noweb-ref dev-tools
+# Nix (config.org: Emacs / Nix)
+nil # Nix language server
+#+end_src
+
+#+begin_src emacs-lisp
+(use-package nix-ts-mode
+  :if (MJ-treesit-ready-p 'nix)
+  :mode "\\.nix\\'")
+#+end_src
+
+** LaTeX
+
+*Master file.* =TeX-master t= treats every =.tex= file as a stand-alone
+document, so AUCTeX never asks which file to compile. For a multi-file
+project (chapters =\input= into =main.tex=), open each chapter and press
+=C-c _= once to name its master file; AUCTeX stores that in a small comment
+block at the end of the chapter. Compiling a chapter without it fails with
+a clear "Missing \begin{document}" error.
+
+AUCTeX stays. New: SyncTeX correlation (click in the PDF to jump to the
+source and back), completion through texlab and corfu (replacing
+company-auctex and lsp-latex), and on NixOS PDFs shown inside Emacs.
+
+*[Nix]* The language server and the TeX distribution, for home/dev.nix:
+
+#+begin_src nix :noweb-ref dev-tools
+# LaTeX (config.org: Emacs / LaTeX)
+texlab
+texliveMedium
+#+end_src
+
+#+begin_src emacs-lisp
+(use-package tex
+  :ensure auctex
+  :hook ((LaTeX-mode . visual-line-mode)
+         (LaTeX-mode . TeX-source-correlate-mode))
+  :custom
+  (TeX-auto-save t)
+  (TeX-parse-self t)
+  (TeX-master t)                  ; every file is its own master (see above)
+  (TeX-source-correlate-start-server t)
+  :config
+  (unless MJ-windows-p            ; [NixOS] view PDFs in Emacs with pdf-tools
+    (setf (alist-get 'output-pdf TeX-view-program-selection) '("PDF Tools"))
+    (add-hook 'TeX-after-compilation-finished-functions
+              #'TeX-revert-document-buffer)))
+#+end_src
+
+CDLaTeX gives very fast maths input (=`a= → =\alpha=, quick fractions
+and environments), in LaTeX and in Org.
+
+CDLaTeX binds =TAB= to its own command (jumping out of braces, expanding
+its templates), which hides yasnippet's =TAB=. CDLaTeX offers a hook that
+runs first on =TAB=: =MJ-yas-expand-maybe= tries to expand a snippet there
+and only lets CDLaTeX continue when there is none. Inside an expanded
+snippet, =TAB= still jumps between its fields.
+
+#+begin_src emacs-lisp
+(defun MJ-yas-expand-maybe ()
+  "Expand a yasnippet before point; return non-nil if one was expanded.
+Used in `cdlatex-tab-hook' so snippets work in LaTeX buffers."
+  (when (bound-and-true-p yas-minor-mode)
+    (let ((yas-fallback-behavior 'return-nil))
+      (yas-expand))))
+
+(use-package cdlatex
+  :hook ((LaTeX-mode . turn-on-cdlatex)
+         (org-mode   . turn-on-org-cdlatex))
+  :config
+  (add-hook 'cdlatex-tab-hook #'MJ-yas-expand-maybe))
+
+(use-package citar
+  :custom
+  (citar-bibliography '("~/path/to/your/references.bib")))   ; adjust
+#+end_src
+
+*[NixOS]* pdf-tools needs a compiled helper program, which Nix builds; on
+Windows that is awkward, so it is skipped there.
+
+#+begin_src emacs-lisp
+(unless MJ-windows-p
+  (use-package pdf-tools
+    :init (pdf-loader-install)))
+#+end_src
+
+** Spell checking
+
+*[NixOS]* jinx checks several languages at once in all text buffers (LaTeX
+and Org derive from text-mode). It needs enchant and hunspell dictionaries
+(home.nix). Windows keeps flyspell, but only switches it on when a spell
+checker program (hunspell or aspell) is installed; Windows has none by
+default. Hunspell for Windows is available from ezwinports, with
+dictionaries from LibreOffice.
+
+*[Nix]* The dictionaries, for home/dev.nix:
+
+#+begin_src nix :noweb-ref dev-tools
+# Spelling (config.org: Emacs / Spell checking)
+hunspellDicts.en_US
+hunspellDicts.nl_NL
+#+end_src
+
+#+begin_src emacs-lisp
+(unless MJ-windows-p
+  (use-package jinx
+    :hook (text-mode . jinx-mode)
+    :bind ("M-$" . jinx-correct)
+    :custom (jinx-languages "en_US nl_NL")))
+
+(when MJ-windows-p
+  (use-package flyspell
+    :ensure nil
+    :if (or (executable-find "hunspell") (executable-find "aspell"))
+    :hook (LaTeX-mode . flyspell-mode)))
+#+end_src
+
+** Org, notebooks and slides
+
+Org Babel runs code blocks in Emacs Lisp, Python and LaTeX.
+
+#+begin_src emacs-lisp
+(use-package org
+  :ensure nil
+  :hook (org-mode . visual-line-mode)
+  :custom
+  ;; Keep code blocks exactly as written: no extra 2-space indentation
+  ;; after editing a block, and Python's indentation is never touched.
+  (org-src-preserve-indentation t)
+  :config
+  (org-babel-do-load-languages
+   'org-babel-load-languages
+   '((emacs-lisp . t) (python . t) (latex . t))))
+#+end_src
+
+*Removing a list item.* Org renumbers a list when items are moved
+(=M-<up>=, =M-<down>=) but not when one is killed; that needed a =C-c
+C-c= afterwards. =C-c k= kills the item the cursor is in (anywhere on any
+of its lines, sub-items included) and renumbers the list, fixing
+checkbox counters like =[1/3]= too. =C-u C-c k= deletes it without
+saving it to the kill ring. The kill ring gets the item without its
+bullet, so =M-RET= then =C-y= elsewhere moves it with a correct bullet.
+It uses Org's own list functions, the ones behind =M-<up>= and
+=M-<down>=; Org has no built-in command for this (checked up to 9.8).
+
+#+begin_src emacs-lisp
+(defun MJ-org-kill-list-item (&optional delete)
+  "Kill the list item at point, sub-items included, and renumber the list.
+With a prefix argument, DELETE the item instead of saving it to the kill ring."
+  (interactive "P")
+  (let ((item (or (org-in-item-p) (user-error "Not in a list item"))))
+    (goto-char item)
+    (let ((struct (org-list-send-item item (if delete 'delete 'kill)
+                                      (org-list-struct))))
+      (org-list-write-struct struct (org-list-parents-alist struct))
+      (org-update-checkbox-count-maybe))))
+
+(with-eval-after-load 'org
+  (define-key org-mode-map (kbd "C-c k") #'MJ-org-kill-list-item))
+#+end_src
+
+*[NixOS]* emacs-jupyter runs real Jupyter kernels from Org blocks
+(=#+begin_src jupyter-python :session s=), with inline plots. It needs
+=ipykernel= in the project (=uv add --dev ipykernel=). It must be added to
+Babel after Python.
+
+#+begin_src emacs-lisp
+(unless MJ-windows-p
+  (use-package jupyter
+    :after org
+    :config
+    (org-babel-do-load-languages
+     'org-babel-load-languages
+     (append org-babel-load-languages '((jupyter . t))))))
+#+end_src
+
+org-re-reveal exports Org outlines to reveal.js slides: =C-c C-e v v=
+(export) or =v b= (export and open). Each course folder holds its own
+reveal.js =dist/= next to the slides, so the reveal.js root is the folder
+of the exported file.
+
+#+begin_src emacs-lisp
+(use-package org-re-reveal
+  :after org
+  :custom
+  (org-re-reveal-root ".")
+  (org-re-reveal-revealjs-version "4"))
+#+end_src
+
+** Terminal
+
+*[NixOS]* A full terminal inside Emacs (eat does not support Windows).
+
+#+begin_src emacs-lisp
+(unless MJ-windows-p
+  (use-package eat
+    :commands eat))
+#+end_src
+
+** Customize settings (loaded last)
+
+Settings saved through =M-x customize= live in =custom.el= (see
+[[*Platform detection and packages][Platform detection and packages]]).
+Loading it after everything else means a Customize choice overrides the
+value set above. This used to happen in the stub; doing it here keeps
+every stub, including the one Home Manager writes, a single line.
+
+One exception needs care: =custom.el= also stores
+=package-selected-packages=, the list of packages I chose to install. When
+=use-package= installs a new package during startup, it adds it to that
+list in memory; loading =custom.el= afterwards would replace the list with
+the older saved copy, and =package-autoremove= would then offer to delete
+the new package. So the two lists are merged instead of overwritten.
+
+#+begin_src emacs-lisp
+(let ((installed-this-session package-selected-packages))
+  (load custom-file 'noerror 'nomessage)
+  (setq package-selected-packages
+        (delete-dups (append installed-this-session package-selected-packages))))
+#+end_src
+
+** Project environments (keep last)
+
+envrc reads a project's =.envrc= via direnv and gives each buffer that
+project's =PATH=, so =python=, =ruff=, =basedpyright= and =debugpy= come from
+the project's =.venv= or Nix dev shell. It must be set up after the other
+hooks, hence its place at the end. Skipped where direnv is absent (the
+Windows laptop).
+
+#+begin_src emacs-lisp
+(use-package envrc
+  :if (executable-find "direnv")
+  :hook (after-init . envrc-global-mode))
+
+;;; config.el ends here
+#+end_src
+
+** Notes for NixOS
+
+Everything Nix needs for Emacs is in this file as well: the Emacs package,
+the grammars, the daemon and the stub in
+[[*Emacs packaging: home/emacs.nix][Emacs packaging]], and the external
+tools as =dev-tools= pieces in the sections above. Nix reads the tangled
+=emacs/config.el= (committed to the repository) to see which packages to
+install. Run =git add= after creating a file: flakes only see tracked files.
