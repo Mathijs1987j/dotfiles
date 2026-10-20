@@ -60,6 +60,7 @@
           (lambda () (add-hook 'after-save-hook #'MJ-tangle-config nil t)))
 
 (setq inhibit-startup-message t
+      use-short-answers t        ; y/n instead of yes/no everywhere
       history-length 25
       global-auto-revert-non-file-buffers t)
 
@@ -171,6 +172,17 @@ Needs git and a C compiler on PATH."
     (when (executable-find program)
       (eglot-ensure))))
 
+(defun MJ-js-server (&optional _interactive)
+  "Return the command for the JavaScript/TypeScript language server.
+TypeScript 7 and later contain their own server (`tsc --lsp --stdio');
+older versions need the separate typescript-language-server."
+  (let ((version (ignore-errors (car (process-lines "tsc" "--version")))))
+    (if (and version
+             (string-match "Version \\([0-9]+\\)" version)
+             (>= (string-to-number (match-string 1 version)) 7))
+        '("tsc" "--lsp" "--stdio")
+      '("typescript-language-server" "--stdio"))))
+
 (use-package eglot
   :ensure nil
   :bind (:map eglot-mode-map
@@ -192,10 +204,24 @@ Needs git and a C compiler on PATH."
       (_server (_method (eql 'workspace/didChangeWatchedFiles)) _id &rest _)
       "Ignore file-watching requests on Windows."
       nil))
-  ;; Accept, silently, servers' offers to track multiple workspace folders.
+  ;; JavaScript/TypeScript: the server is chosen when a file is opened
+  ;; (see MJ-js-server above).
+  (add-to-list 'eglot-server-programs
+               '(((js-mode            :language-id "javascript")
+                  (js-ts-mode         :language-id "javascript")
+                  (tsx-ts-mode        :language-id "typescriptreact")
+                  (typescript-ts-mode :language-id "typescript")
+                  (typescript-mode    :language-id "typescript"))
+                 . MJ-js-server))
+  ;; Accept, silently, two optional features some servers offer but eglot
+  ;; does not need (see above).
   (cl-defmethod eglot-register-capability
     (_server (_method (eql 'workspace/didChangeWorkspaceFolders)) _id &rest _)
     "Ignore workspace-folder registration (single-folder projects)."
+    nil)
+  (cl-defmethod eglot-register-capability
+    (_server (_method (eql 'workspace/didChangeConfiguration)) _id &rest _)
+    "Ignore configuration-change registration (eglot sends settings anyway)."
     nil)
   ;; Readable eglot indicator in the mode line, whatever the theme.
   (set-face-attribute 'eglot-mode-line nil :inherit 'mode-line-emphasis))
@@ -205,7 +231,7 @@ Needs git and a C compiler on PATH."
               '(:basedpyright (:analysis (:typeCheckingMode "standard"))))
 
 (add-hook 'python-base-mode-hook (MJ-eglot-ensure-if "basedpyright-langserver"))
-(add-hook 'js-base-mode-hook     (MJ-eglot-ensure-if "typescript-language-server"))
+(add-hook 'js-base-mode-hook     (MJ-eglot-ensure-if "tsc"))
 (add-hook 'css-base-mode-hook    (MJ-eglot-ensure-if "vscode-css-language-server"))
 (add-hook 'web-mode-hook         (MJ-eglot-ensure-if "vscode-html-language-server"))
 (add-hook 'LaTeX-mode-hook       (MJ-eglot-ensure-if "texlab"))
@@ -283,7 +309,7 @@ Needs git and a C compiler on PATH."
   :custom
   (TeX-auto-save t)
   (TeX-parse-self t)
-  (TeX-master nil)                ; ask for the master file in multi-file projects
+  (TeX-master t)                  ; every file is its own master (see above)
   (TeX-source-correlate-start-server t)
   :config
   (unless MJ-windows-p            ; [NixOS] view PDFs in Emacs with pdf-tools
@@ -291,9 +317,18 @@ Needs git and a C compiler on PATH."
     (add-hook 'TeX-after-compilation-finished-functions
               #'TeX-revert-document-buffer)))
 
+(defun MJ-yas-expand-maybe ()
+  "Expand a yasnippet before point; return non-nil if one was expanded.
+Used in `cdlatex-tab-hook' so snippets work in LaTeX buffers."
+  (when (bound-and-true-p yas-minor-mode)
+    (let ((yas-fallback-behavior 'return-nil))
+      (yas-expand))))
+
 (use-package cdlatex
   :hook ((LaTeX-mode . turn-on-cdlatex)
-         (org-mode   . turn-on-org-cdlatex)))
+         (org-mode   . turn-on-org-cdlatex))
+  :config
+  (add-hook 'cdlatex-tab-hook #'MJ-yas-expand-maybe))
 
 (use-package citar
   :custom
@@ -312,11 +347,16 @@ Needs git and a C compiler on PATH."
 (when MJ-windows-p
   (use-package flyspell
     :ensure nil
+    :if (or (executable-find "hunspell") (executable-find "aspell"))
     :hook (LaTeX-mode . flyspell-mode)))
 
 (use-package org
   :ensure nil
   :hook (org-mode . visual-line-mode)
+  :custom
+  ;; Keep code blocks exactly as written: no extra 2-space indentation
+  ;; after editing a block, and Python's indentation is never touched.
+  (org-src-preserve-indentation t)
   :config
   (org-babel-do-load-languages
    'org-babel-load-languages
