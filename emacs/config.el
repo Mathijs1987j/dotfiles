@@ -73,6 +73,22 @@
 
 (add-hook 'prog-mode-hook #'electric-pair-local-mode)
 
+(defun my-split-window-right ()
+  "Split window with another buffer."
+  (interactive)
+  (select-window (split-window-right))
+  (switch-to-buffer (other-buffer)))
+
+(global-set-key (kbd "C-x 3") #'my-split-window-right)
+
+(defun my-split-window-below ()
+  "Split window with another buffer."
+  (interactive)
+  (select-window (split-window-below))
+  (switch-to-buffer (other-buffer)))
+
+(global-set-key (kbd "C-x 2") #'my-split-window-below)
+
 (load-theme 'deeper-blue t)
 ;; Built-in alternative worth trying: (load-theme 'modus-vivendi t)
 
