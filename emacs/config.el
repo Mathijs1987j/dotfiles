@@ -25,6 +25,16 @@
 (require 'use-package)
 (setq use-package-always-ensure (not MJ-nix-p))
 
+(when MJ-windows-p
+  (let ((gnu-find (seq-find #'file-exists-p
+                            (list (substitute-in-file-name
+                                   "$USERPROFILE/scoop/apps/git/current/usr/bin/find.exe")
+                                  "C:/Program Files/Git/usr/bin/find.exe"))))
+    (when gnu-find
+      (setq find-program gnu-find))))
+
+(setq xref-search-program 'ripgrep)
+
 (setq custom-file (locate-user-emacs-file "custom.el"))
 
 (defconst MJ-config-file
@@ -175,7 +185,24 @@ Needs git and a C compiler on PATH."
   (add-to-list 'eglot-server-programs
                '((LaTeX-mode :language-id "latex") . ("texlab")))
   (add-to-list 'eglot-server-programs
-               '(nix-ts-mode . ("nil"))))
+               '(nix-ts-mode . ("nil")))
+  ;; [Windows] Accept file-watch requests without watching (see above).
+  (when MJ-windows-p
+    (cl-defmethod eglot-register-capability
+      (_server (_method (eql 'workspace/didChangeWatchedFiles)) _id &rest _)
+      "Ignore file-watching requests on Windows."
+      nil))
+  ;; Accept, silently, servers' offers to track multiple workspace folders.
+  (cl-defmethod eglot-register-capability
+    (_server (_method (eql 'workspace/didChangeWorkspaceFolders)) _id &rest _)
+    "Ignore workspace-folder registration (single-folder projects)."
+    nil)
+  ;; Readable eglot indicator in the mode line, whatever the theme.
+  (set-face-attribute 'eglot-mode-line nil :inherit 'mode-line-emphasis))
+
+;; basedpyright: "standard" type checking instead of its strict default.
+(setq-default eglot-workspace-configuration
+              '(:basedpyright (:analysis (:typeCheckingMode "standard"))))
 
 (add-hook 'python-base-mode-hook (MJ-eglot-ensure-if "basedpyright-langserver"))
 (add-hook 'js-base-mode-hook     (MJ-eglot-ensure-if "typescript-language-server"))

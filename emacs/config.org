@@ -105,6 +105,26 @@ than the Unix-style one bundled with Git.
 (setq use-package-always-ensure (not MJ-nix-p))
 #+end_src
 
+On Windows, =find= on =PATH= is Windows' own =find.exe=, an unrelated
+text-search tool. Emacs (project.el, and through it eglot) expects GNU
+=find= to list a project's files when the folder is not a git repository;
+with the Windows one, listing fails ("FIND: Parameter format not correct")
+and language servers can crash. Git for Windows ships GNU =find=, so Emacs
+is pointed at it. Project-wide search (=project-find-regexp=, xref) uses
+ripgrep instead of Unix =grep= on both machines.
+
+#+begin_src emacs-lisp
+(when MJ-windows-p
+  (let ((gnu-find (seq-find #'file-exists-p
+                            (list (substitute-in-file-name
+                                   "$USERPROFILE/scoop/apps/git/current/usr/bin/find.exe")
+                                  "C:/Program Files/Git/usr/bin/find.exe"))))
+    (when gnu-find
+      (setq find-program gnu-find))))
+
+(setq xref-search-program 'ripgrep)
+#+end_src
+
 Customize writes to its own file in the Emacs directory, never into the
 repository or the stub (on NixOS the stub is read-only). It is set here,
 early, so Customize knows where to write; the file itself is loaded at the
@@ -347,6 +367,29 @@ The lsp-mode indentation workaround (issue #2915, the =lsp--get-indent-width=
 advice and the =tab-width= hook) is gone: eglot never drives indentation,
 so web-mode's own offsets always apply.
 
+*File watching on Windows.* Language servers can ask the editor to watch
+folders for changes. basedpyright asks to watch the project /and the whole
+Python installation/; on Windows eglot cannot set up that many watches,
+replies with an error, and basedpyright crashes on that error ("Not
+auto-reconnecting, last one didn't last long"). On Windows, eglot therefore
+accepts such requests without watching. Cost: files created or renamed
+outside Emacs are noticed after reopening the file or =M-x
+eglot-reconnect=.
+
+*Workspace folders.* Some servers (the HTML server, for example) offer to
+track several workspace folders. eglot does not support that and warned
+about it ("Server tried to register unsupported capability
+'workspace/didChangeWorkspaceFolders'"). One folder per project is all I
+need, so the offer is accepted silently.
+
+*Mode-line indicator.* eglot's indicator uses a green that is unreadable
+with deeper-blue; it now uses the mode line's own emphasis style.
+
+*Type-checking level.* basedpyright's default mode is strict: it warns
+about every missing type annotation, which is noise for beginners' code
+and teaching material. "standard" matches plain pyright. Switch per project
+with a =[tool.basedpyright]= section in =pyproject.toml= if wanted.
+
 #+begin_src emacs-lisp
 (defun MJ-eglot-ensure-if (program)
   "Return a hook function that starts eglot only if PROGRAM is on PATH."
@@ -368,7 +411,24 @@ so web-mode's own offsets always apply.
   (add-to-list 'eglot-server-programs
                '((LaTeX-mode :language-id "latex") . ("texlab")))
   (add-to-list 'eglot-server-programs
-               '(nix-ts-mode . ("nil"))))
+               '(nix-ts-mode . ("nil")))
+  ;; [Windows] Accept file-watch requests without watching (see above).
+  (when MJ-windows-p
+    (cl-defmethod eglot-register-capability
+      (_server (_method (eql 'workspace/didChangeWatchedFiles)) _id &rest _)
+      "Ignore file-watching requests on Windows."
+      nil))
+  ;; Accept, silently, servers' offers to track multiple workspace folders.
+  (cl-defmethod eglot-register-capability
+    (_server (_method (eql 'workspace/didChangeWorkspaceFolders)) _id &rest _)
+    "Ignore workspace-folder registration (single-folder projects)."
+    nil)
+  ;; Readable eglot indicator in the mode line, whatever the theme.
+  (set-face-attribute 'eglot-mode-line nil :inherit 'mode-line-emphasis))
+
+;; basedpyright: "standard" type checking instead of its strict default.
+(setq-default eglot-workspace-configuration
+              '(:basedpyright (:analysis (:typeCheckingMode "standard"))))
 
 (add-hook 'python-base-mode-hook (MJ-eglot-ensure-if "basedpyright-langserver"))
 (add-hook 'js-base-mode-hook     (MJ-eglot-ensure-if "typescript-language-server"))
