@@ -1586,6 +1586,11 @@ window-rule {
     geometry-corner-radius 6
     clip-to-geometry true
 }
+// foot shows in different colour focus ring, to distinguish from Alacritty.
+window-rule {
+    match app-id="^foot$"
+    focus-ring { active-color "#a6e3a1"; }   // foot: green ring
+}
 #+end_src
 
 *** Key bindings
