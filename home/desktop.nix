@@ -60,6 +60,7 @@ in
     power-menu
     swaybg # wallpaper (started from niri's config)
     wl-clipboard # wl-copy / wl-paste
+    libnotify # notifications
     brightnessctl # backlight keys
     playerctl # media keys
     pwvucontrol # volume mixer (PipeWire)

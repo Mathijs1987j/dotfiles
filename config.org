@@ -1227,6 +1227,7 @@ file, and niri reloads it at once: no rebuild needed for niri.
     power-menu
     swaybg # wallpaper (started from niri's config)
     wl-clipboard # wl-copy / wl-paste
+    libnotify # notifications
     brightnessctl # backlight keys
     playerctl # media keys
     pwvucontrol # volume mixer (PipeWire)
@@ -1621,6 +1622,8 @@ binds {
         spawn-sh "cliphist list | fuzzel --dmenu | cliphist decode | wl-copy";
     }
     Super+Alt+L hotkey-overlay-title="Lock the screen" { spawn "swaylock"; }
+    // Mod+Shift+I: show which program the focused window belongs to.
+    Mod+Shift+I hotkey-overlay-title="Which program is this?" { spawn-sh r#"notify-send "$(niri msg --json focused-window | jq -r .app_id)" "$(niri msg --json focused-window | jq -r .title)""#; }
 #+end_src
 
 *** Hardware keys

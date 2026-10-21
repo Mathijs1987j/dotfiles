@@ -116,6 +116,8 @@ binds {
         spawn-sh "cliphist list | fuzzel --dmenu | cliphist decode | wl-copy";
     }
     Super+Alt+L hotkey-overlay-title="Lock the screen" { spawn "swaylock"; }
+    // Mod+Shift+I: show which program the focused window belongs to.
+    Mod+Shift+I hotkey-overlay-title="Which program is this?" { spawn-sh r#"notify-send "$(niri msg --json focused-window | jq -r .app_id)" "$(niri msg --json focused-window | jq -r .title)""#; }
 
     // Volume, media and brightness keys (also work on the lock screen)
     XF86AudioRaiseVolume allow-when-locked=true { spawn-sh "wpctl set-volume @DEFAULT_AUDIO_SINK@ 0.05+ -l 1.0"; }
