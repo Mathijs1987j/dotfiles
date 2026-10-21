@@ -786,7 +786,7 @@ from a plain terminal.
 
     # tangle: write every generated file from ~/dotfiles/config.org, without
     # opening Emacs (the same as saving config.org in Emacs). Chapter 20.
-    (writeShellScriptBin "tangle" ''
+    (writeShellScriptBin "tangle-config" ''
       exec emacs --batch --eval "(progn (require 'org) (setq org-src-preserve-indentation t) (let ((coding-system-for-write 'utf-8-unix)) (org-babel-tangle-file \"$HOME/dotfiles/config.org\")))"
     '')
 
