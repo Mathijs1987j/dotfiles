@@ -998,7 +998,7 @@ preference is a fingerprint), so dark sites would turn light.
 #+begin_src nix
 # GENERATED from config.org ("User: mathijs / Browser"). Do not edit; edit config.org.
 # home/browser.nix: LibreWolf, and which programs open links and files.
-{ ... }:
+{ config, ... }:
 
 {
   # ---------------------------------------------------------------- LibreWolf
@@ -1023,6 +1023,12 @@ preference is a fingerprint), so dark sites would turn light.
       # "identity.fxaccounts.enabled" = true;
     };
   };
+
+     # Home Manager writes the settings above to ~/.librewolf/, but LibreWolf
+     # now keeps its profiles in ~/.config/librewolf/librewolf/ (the XDG layout)
+     # and reads the overrides file from that folder. Put the same file there.
+     xdg.configFile."librewolf/librewolf/librewolf.overrides.cfg".source =
+       config.home.file.".librewolf/librewolf.overrides.cfg".source;
 
   # Default applications for links and files.
   xdg.mimeApps = {
