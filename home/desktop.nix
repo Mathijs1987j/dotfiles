@@ -114,9 +114,9 @@ in
   services.swayidle = {
     enable = true;
     timeouts = [
-      { timeout = 300; command = lock; } # 5 min: lock
+      { timeout = 7200; command = lock; } # 120 min: lock
       {
-        timeout = 330; # then switch the screens off
+        timeout = 7230; # then switch the screens off
         command = "${pkgs.niri}/bin/niri msg action power-off-monitors";
       }
     ];
