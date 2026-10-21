@@ -107,6 +107,8 @@ binds {
     Mod+M hotkey-overlay-title="Mail (focus or start)" { spawn "run-or-raise" "thunderbird" "thunderbird"; }
     // Mod+Shift+W: WhatsApp Web in its own window (it opens on "chat").
     Mod+Shift+W hotkey-overlay-title="WhatsApp (focus or start)" { spawn "run-or-raise" "whatsapp" "whatsapp-web"; }
+    Mod+S hotkey-overlay-title="Signal (focus or start)" { spawn "run-or-raise" "signal" "signal-desktop"; }
+    Mod+Shift+S hotkey-overlay-title="Spotify (focus or start)" { spawn "run-or-raise" "spotify" "spotify"; }
     Mod+X hotkey-overlay-title="Power menu" { spawn "power-menu"; }
     Mod+N hotkey-overlay-title="Dismiss notifications" { spawn "makoctl" "dismiss" "--all"; }
     Mod+Shift+N hotkey-overlay-title="Show last notification again" { spawn "makoctl" "restore"; }
