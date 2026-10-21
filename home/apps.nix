@@ -31,6 +31,7 @@ in
     mpv # video
     loupe # images
     papers # PDFs
+    spotify
     qbittorrent
     heroic # GOG games (Civ IV), via Wine/Proton
     augustus # Caesar 3 engine; point it at your GOG game files

@@ -967,6 +967,7 @@ musescore
 mpv # video
 loupe # images
 papers # PDFs
+spotify
 #+end_src
 
 *** Downloads and games
@@ -1227,7 +1228,7 @@ file, and niri reloads it at once: no rebuild needed for niri.
     power-menu
     swaybg # wallpaper (started from niri's config)
     wl-clipboard # wl-copy / wl-paste
-    libnotify # notifications
+    libnotify
     brightnessctl # backlight keys
     playerctl # media keys
     pwvucontrol # volume mixer (PipeWire)
