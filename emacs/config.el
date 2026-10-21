@@ -90,6 +90,24 @@
 
 (global-set-key (kbd "C-x 2") #'my-split-window-below)
 
+(use-package windmove
+  :ensure nil
+  :bind (("C-c <left>"  . windmove-left)
+         ("C-c <right>" . windmove-right)
+         ("C-c <up>"    . windmove-up)
+         ("C-c <down>"  . windmove-down))
+  :config
+  (defvar-keymap MJ-windmove-repeat-map
+    :repeat t
+    "<left>"  #'windmove-left
+    "<right>" #'windmove-right
+    "<up>"    #'windmove-up
+    "<down>"  #'windmove-down))
+
+(with-eval-after-load 'org
+  (dolist (key '("C-c <left>" "C-c <right>" "C-c <up>" "C-c <down>"))
+    (keymap-unset org-mode-map key t)))
+
 (load-theme 'deeper-blue t)
 ;; Built-in alternative worth trying: (load-theme 'modus-vivendi t)
 
