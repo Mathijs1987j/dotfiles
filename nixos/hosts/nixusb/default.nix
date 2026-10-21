@@ -26,4 +26,12 @@
 
   # Fewer writes to the USB disk: don't record when files were last read.
   fileSystems."/".options = [ "noatime" ];
-}
+
+# The built-in keyboard of this HP is broken: one Ctrl key sometimes
+# "sticks" (a press without a release), which turns m into Enter and
+# i into Tab on text screens. Make Linux ignore that key.
+services.udev.extraHwdb = ''
+  evdev:atkbd:dmi:*
+   KEYBOARD_KEY_1d=reserved
+ '';
+ }
