@@ -3368,7 +3368,7 @@ let
   launcher =
     name: script: settings: runtimeInputs:
     pkgs.writeShellApplication {
-      inherit name runtimeInputs;
+      inherit name runtinmeInputs;
       text =
         lib.concatStrings (lib.mapAttrsToList (k: v: "${k}=${lib.escapeShellArg v}\n") settings)
         + builtins.readFile ./games/common.sh
@@ -3712,8 +3712,10 @@ What happens when =config.org= is saved, in a file of its own so the
    less than half as many files as the previous one (a sign that something
    went wrong). A file deleted by mistake would anyway be written again at
    the next save.
-3. *Stage* the written files, and the deletions, in git. Nix only sees files
-   that git knows; staging is enough, committing stays yours. Only these
+3. *Stage* the written files, and the deletions, in git. Scripts in
+   =live/bin/= are recorded as executable, also when you save on Windows,
+   which has no such permission (otherwise they arrive on NixOS as ordinary
+   files: /Permission denied/). Nix only sees files that git knows; staging is enough, committing stays yours. Only these
    files are staged, nothing else in the folder.
 4. *Report*, in one message: how many files, what was removed, and on
    NixOS whether a rebuild is needed (the same question as =dotfiles-status=)
@@ -3765,6 +3767,7 @@ What happens when =config.org= is saved, in a file of its own so the
 
 (defun MJ--write-manifest (files)
   "Remember FILES as written by this tangle."
+  (make-directory (file-name-directory MJ-tangle-manifest) t) ; a new machine
   (with-temp-file MJ-tangle-manifest
     (prin1 files (current-buffer))))
 
@@ -3845,6 +3848,13 @@ What happens when =config.org= is saved, in a file of its own so the
     ;; Stage the written files and the deletions, so Nix sees them.
     (when written
       (apply #'MJ--git "add" "--" (mapcar #'MJ--relative written)))
+    ;; Scripts in live/bin must be executable on NixOS. Windows has no such
+    ;; permission, and git there would record them as ordinary files; so set
+    ;; the bit in git itself (harmless on NixOS, where it is set already).
+    (let ((scripts (seq-filter (lambda (f) (string-prefix-p "live/bin/" f))
+                               (mapcar #'MJ--relative written))))
+      (when scripts
+        (apply #'MJ--git "update-index" "--chmod=+x" "--" scripts)))
     (when stale
       (apply #'MJ--git "rm" "--cached" "--quiet" "--ignore-unmatch" "--"
              (mapcar #'MJ--relative stale)))

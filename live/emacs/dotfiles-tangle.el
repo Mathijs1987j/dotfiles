@@ -43,6 +43,7 @@
 
 (defun MJ--write-manifest (files)
   "Remember FILES as written by this tangle."
+  (make-directory (file-name-directory MJ-tangle-manifest) t) ; a new machine
   (with-temp-file MJ-tangle-manifest
     (prin1 files (current-buffer))))
 
@@ -123,6 +124,13 @@
     ;; Stage the written files and the deletions, so Nix sees them.
     (when written
       (apply #'MJ--git "add" "--" (mapcar #'MJ--relative written)))
+    ;; Scripts in live/bin must be executable on NixOS. Windows has no such
+    ;; permission, and git there would record them as ordinary files; so set
+    ;; the bit in git itself (harmless on NixOS, where it is set already).
+    (let ((scripts (seq-filter (lambda (f) (string-prefix-p "live/bin/" f))
+                               (mapcar #'MJ--relative written))))
+      (when scripts
+        (apply #'MJ--git "update-index" "--chmod=+x" "--" scripts)))
     (when stale
       (apply #'MJ--git "rm" "--cached" "--quiet" "--ignore-unmatch" "--"
              (mapcar #'MJ--relative stale)))

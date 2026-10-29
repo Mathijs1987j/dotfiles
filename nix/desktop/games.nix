@@ -17,7 +17,7 @@ let
   launcher =
     name: script: settings: runtimeInputs:
     pkgs.writeShellApplication {
-      inherit name runtimeInputs;
+      inherit name runtinmeInputs;
       text =
         lib.concatStrings (lib.mapAttrsToList (k: v: "${k}=${lib.escapeShellArg v}\n") settings)
         + builtins.readFile ./games/common.sh
