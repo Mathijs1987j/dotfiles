@@ -1,0 +1,8 @@
+# GENERATED from config.org ("Internet / WhatsApp Web"). Do not edit; edit config.org.
+[Desktop Entry]
+Type=Application
+Name=WhatsApp (web)
+Exec=whatsapp-web
+Icon=librewolf
+Categories=Network;Chat;
+StartupWMClass=whatsapp

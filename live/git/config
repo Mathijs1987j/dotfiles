@@ -1,0 +1,14 @@
+# GENERATED from config.org ("Every machine / Git and GitHub"). Do not edit; edit config.org.
+[user]
+	name = Mathijs
+	email = mathijsjanssenecon@gmail.com
+[init]
+	defaultBranch = main
+[pull]
+	rebase = false
+[credential "https://github.com"]
+	helper =
+	helper = !gh auth git-credential
+[credential "https://gist.github.com"]
+	helper =
+	helper = !gh auth git-credential

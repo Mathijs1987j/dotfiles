@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+# GENERATED from config.org ("Desktop / niri"). Do not edit; edit config.org.
+# power-menu: lock, suspend, log out, reboot or shut down, chosen in fuzzel.
+set -euo pipefail
+choice=$(printf '%s\n' lock suspend logout reboot poweroff |
+  fuzzel --dmenu --prompt "power: " --lines 5 --width 20) || exit 0
+case "$choice" in
+  lock) loginctl lock-session ;;
+  suspend) systemctl suspend ;;
+  logout) niri msg action quit --skip-confirmation ;;
+  reboot) systemctl reboot ;;
+  poweroff) systemctl poweroff ;;
+esac

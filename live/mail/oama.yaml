@@ -1,0 +1,8 @@
+# GENERATED from config.org ("Internet / Mail"). Do not edit; edit config.org.
+# oama: replace CLIENT-ID with an app registration your school allows.
+# The tokens are kept in gnome-keyring.
+encryption:
+  tag: KEYRING
+services:
+  microsoft:
+    client_id: CLIENT-ID

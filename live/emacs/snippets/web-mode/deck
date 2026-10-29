@@ -1,0 +1,36 @@
+# -*- mode: snippet -*-
+# GENERATED from config.org ("Emacs / Snippets"). Do not edit; edit config.org.
+# name: reveal.js deck with mj-notation.js
+# key: deck
+# --
+<!doctype html>
+<html lang="${1:nl}">
+<head>
+  <meta charset="utf-8">
+  <title>${2:Title}</title>
+  <link rel="stylesheet" href="dist/reveal.css">
+  <link rel="stylesheet" href="dist/theme/${3:white}.css">
+  <link rel="stylesheet" href="custom.css">
+</head>
+<body>
+  <div class="reveal">
+    <div class="slides">
+      <section>
+        <h1>$2</h1>
+        $0
+      </section>
+    </div>
+  </div>
+  <script src="dist/reveal.js"></script>
+  <script src="plugin/math/math.js"></script>
+  <script src="plugin/notes/notes.js"></script>
+  <script src="mj-notation.js"></script>
+  <script>
+    Reveal.initialize({
+      hash: true,
+      mathjax3: MJNotation.mathjax3(),
+      plugins: [ RevealMath.MathJax3, RevealNotes ],
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+# GENERATED from config.org ("Foundations / Rebuild status"). Do not edit; edit config.org.
+# rebuild [switch|boot|test|build] [nh options]: rebuild through nh, then
+# remember what was built (see dotfiles-fingerprint and dotfiles-status).
+set -euo pipefail
+mode=switch
+case "${1:-}" in
+  switch | boot | test | build)
+    mode=$1
+    shift
+    ;;
+esac
+nh os "$mode" "$@"
+if [ "$mode" != build ]; then
+  state="${XDG_STATE_HOME:-$HOME/.local/state}/dotfiles"
+  mkdir -p "$state"
+  "$HOME/.local/bin/dotfiles-fingerprint" > "$state/built"
+fi

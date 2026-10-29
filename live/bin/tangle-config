@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+# GENERATED from config.org ("Emacs / Tangling"). Do not edit; edit config.org.
+# tangle-config: what saving config.org in Emacs does (write every generated file,
+# remove stale ones, stage them, report), without opening Emacs.
+exec emacs --batch -l "$HOME/dotfiles/live/emacs/dotfiles-tangle.el" -f MJ-tangle-batch

@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+# GENERATED from config.org ("Internet / WhatsApp Web"). Do not edit; edit config.org.
+# whatsapp-web: WhatsApp Web in its own LibreWolf window (app id "whatsapp").
+profile="${XDG_DATA_HOME:-$HOME/.local/share}/librewolf-whatsapp"
+mkdir -p "$profile"
+exec librewolf --profile "$profile" --name whatsapp --class whatsapp \
+  https://web.whatsapp.com "$@"

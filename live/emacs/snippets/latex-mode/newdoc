@@ -1,0 +1,18 @@
+# -*- mode: snippet -*-
+# GENERATED from config.org ("Emacs / Snippets"). Do not edit; edit config.org.
+# name: new document with MJPreamble
+# key: newdoc
+# --
+\\documentclass{article}
+\\usepackage${1:[dutch]}{MJPreamble}
+
+\\title{$2}
+\\author{Mathijs}
+\\date{\\today}
+
+\\begin{document}
+\\maketitle
+
+$0
+
+\\end{document}

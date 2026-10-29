@@ -1,0 +1,3 @@
+# GENERATED from config.org ("Every machine / Shell"). Do not edit; edit config.org.
+# ~/.bash_profile: login shells. Everything interactive is in ~/.bashrc.
+[ -f ~/.bashrc ] && . ~/.bashrc

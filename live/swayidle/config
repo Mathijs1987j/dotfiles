@@ -1,0 +1,5 @@
+# GENERATED from config.org ("Desktop / Lock and idle"). Do not edit; edit config.org.
+timeout 7200 'swaylock -f'
+timeout 7230 'niri msg action power-off-monitors'
+before-sleep 'swaylock -f'
+lock 'swaylock -f'

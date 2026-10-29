@@ -1,0 +1,4 @@
+# GENERATED from config.org ("Desktop / Lock and idle"). Do not edit; edit config.org.
+color=1e1e2e
+show-failed-attempts
+indicator-caps-lock

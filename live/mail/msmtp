@@ -1,0 +1,17 @@
+# GENERATED from config.org ("Internet / Mail"). Do not edit; edit config.org.
+# msmtp: sending through Microsoft 365
+defaults
+auth on
+tls on
+tls_starttls on
+logfile ~/.cache/msmtp.log
+
+account work
+host smtp.office365.com
+port 587
+from m.janssen@uva.nl
+user m.janssen@uva.nl
+auth xoauth2
+passwordeval oama access m.janssen@uva.nl
+
+account default : work

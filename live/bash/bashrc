@@ -1,0 +1,37 @@
+# GENERATED from config.org ("Every machine / Shell"). Do not edit; edit config.org.
+# ~/.bashrc: interactive shells. NixOS's /etc/bashrc has already run.
+[[ $- == *i* ]] || return
+
+# History: long, without duplicates, shared between terminals.
+HISTSIZE=20000
+HISTFILESIZE=20000
+HISTCONTROL=ignoredups:erasedups
+shopt -s histappend autocd globstar checkwinsize
+
+# NixOS (rebuild is a command in ~/.local/bin; see config.org)
+alias rebuild-boot='rebuild boot' # use the new system from the next boot on
+alias update='rebuild switch --update' # update flake.lock, then switch
+alias gens='nh os info'           # list generations
+alias cfg='emacsclient -n ~/dotfiles/config.org'
+# Everyday
+alias ll='ls -lh --group-directories-first --color=auto'
+alias la='ls -lAh --group-directories-first --color=auto'
+alias ..='cd ..'
+alias ...='cd ../..'
+alias e='emacsclient -n'          # open a file in the running Emacs
+alias dots='cd ~/dotfiles'
+# Git
+alias gs='git status'
+alias gl='git log --oneline --graph --decorate -20'
+# Disks
+alias dfh='df -h -x tmpfs -x devtmpfs -x efivarfs'
+
+# mkcd DIR: make a folder and go into it
+mkcd() { mkdir -p -- "$1" && cd -- "$1"; }
+# nwhy PKG: why is PKG part of the current system?
+nwhy() { nix why-depends /run/current-system "$(nix eval --raw "nixpkgs#$1.outPath")"; }
+
+# Prompt and helpers
+command -v starship > /dev/null && eval "$(starship init bash)"
+command -v fzf > /dev/null && eval "$(fzf --bash)"
+command -v zoxide > /dev/null && eval "$(zoxide init bash)"

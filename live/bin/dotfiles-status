@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+# GENERATED from config.org ("Foundations / Rebuild status"). Do not edit; edit config.org.
+# dotfiles-status: one line of JSON for Waybar: "rebuild" when the Nix files
+# differ from the running system, and a note when a new NixOS release is out.
+state="${XDG_STATE_HOME:-$HOME/.local/state}/dotfiles"
+text=""
+tooltip=""
+class=""
+if [ "$("$HOME/.local/bin/dotfiles-fingerprint" 2>/dev/null)" != "$(cat "$state/built" 2>/dev/null)" ]; then
+  text="rebuild"
+  tooltip="The Nix files changed since the last rebuild. Click to rebuild."
+  class="rebuild"
+fi
+if [ -r /var/lib/dotfiles-update/new-release ]; then
+  release=$(cat /var/lib/dotfiles-update/new-release)
+  text="${text:+$text · }NixOS $release"
+  tooltip="${tooltip:+$tooltip\\n}NixOS $release is out: see Moving to the next release in config.org."
+  class="${class:-release}"
+fi
+printf '{"text": "%s", "tooltip": "%s", "class": "%s"}\n' "$text" "$tooltip" "$class"

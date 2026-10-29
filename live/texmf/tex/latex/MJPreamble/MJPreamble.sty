@@ -1,0 +1,104 @@
+%% GENERATED from config.org ("Writing and teaching / LaTeX"). Do not edit; edit config.org.
+\NeedsTeXFormat{LaTeX2e}
+\ProvidesPackage{MJPreamble}[2026/10/29 My common preamble]
+
+\newif\ifMJ@dutch
+\DeclareOption{dutch}{\MJ@dutchtrue}
+\ProcessOptions\relax
+\newcommand{\MJ@name}[2]{\ifMJ@dutch#2\else#1\fi}
+
+\ifMJ@dutch
+  \RequirePackage[english,main=dutch]{babel}
+  \PassOptionsToPackage{dutch}{cleveref}
+\else
+  \RequirePackage[dutch,main=english]{babel}
+\fi
+\RequirePackage[T1]{fontenc}
+\RequirePackage{setspace}
+\RequirePackage{microtype}
+
+\RequirePackage[a4paper,margin=3cm,marginparwidth=1.75cm]{geometry}
+
+\RequirePackage{mathtools}
+\RequirePackage{amssymb}
+\RequirePackage{amsthm}
+\RequirePackage{dsfont}
+\RequirePackage{bm}
+\RequirePackage{stmaryrd}
+\RequirePackage{accents}
+
+\RequirePackage[table]{xcolor}
+\RequirePackage{tabularray}
+\UseTblrLibrary{booktabs,diagbox}
+\RequirePackage{graphicx}
+\RequirePackage{tikz}
+\usetikzlibrary{positioning}
+\RequirePackage{pgfplots}
+\pgfplotsset{compat=1.18}
+
+\RequirePackage{csquotes}
+\RequirePackage{enumitem}
+
+\RequirePackage[colorlinks=true, allcolors=blue]{hyperref}
+\RequirePackage{cleveref}
+
+\newtheorem{theorem}{\MJ@name{Theorem}{Stelling}}
+\counterwithin*{theorem}{section}
+\renewcommand{\thetheorem}{\ifnum\value{section}>0 \thesection.\fi\arabic{theorem}}
+\newtheorem{proposition}[theorem]{\MJ@name{Proposition}{Propositie}}
+\newtheorem{lemma}[theorem]{Lemma}
+\newtheorem{sublemma}[theorem]{Sublemma}
+\newtheorem{corollary}[theorem]{\MJ@name{Corollary}{Gevolg}}
+\theoremstyle{definition}
+\newtheorem{definition}[theorem]{\MJ@name{Definition}{Definitie}}
+\newtheorem{example}[theorem]{\MJ@name{Example}{Voorbeeld}}
+\theoremstyle{remark}
+\newtheorem{remark}[theorem]{\MJ@name{Remark}{Opmerking}}
+
+\ifMJ@dutch
+  \crefname{theorem}{stelling}{stellingen}
+  \crefname{proposition}{propositie}{proposities}
+  \crefname{corollary}{gevolg}{gevolgen}
+  \crefname{sublemma}{sublemma}{sublemma's}
+\else
+  \crefname{sublemma}{sublemma}{sublemmas}
+\fi
+
+% Number sets
+\newcommand{\N}{\mathbb{N}}
+\newcommand{\Z}{\mathbb{Z}}
+\newcommand{\Q}{\mathbb{Q}}
+\newcommand{\R}{\mathbb{R}}
+\newcommand{\C}{\mathbb{C}}
+% Brackets that size themselves: \abs{x}, \abs*{\frac ab}, \abs[\big]{x}
+\DeclarePairedDelimiter{\abs}{\lvert}{\rvert}
+\DeclarePairedDelimiter{\norm}{\lVert}{\rVert}
+\DeclarePairedDelimiter{\ceil}{\lceil}{\rceil}
+\DeclarePairedDelimiter{\floor}{\lfloor}{\rfloor}
+% Operators
+\DeclareMathOperator*{\argmax}{argmax}
+\DeclareMathOperator*{\argmin}{argmin}
+\DeclareMathOperator*{\argsup}{argsup}
+\DeclareMathOperator*{\arginf}{arginf}
+\DeclareMathOperator{\supp}{supp}
+\DeclareMathOperator{\conv}{conv}
+\DeclareMathOperator{\E}{\mathbb{E}}
+\DeclareMathOperator{\Var}{Var}
+\DeclareMathOperator{\Cov}{Cov}
+% The d of integrals and derivatives
+\newcommand{\dd}{\mathop{}\!\mathrm{d}}
+% A display-size integral sign in running text
+\newcommand{\dint}{\mathop{\displaystyle\int}\nolimits}
+% Sets with a growing bar: \set*{x \in \R \given x > 0}
+\providecommand{\given}{\mid}
+\DeclarePairedDelimiterX{\set}[1]{\{}{\}}{%
+  \renewcommand{\given}{\nonscript\:\delimsize\vert\nonscript\:\mathopen{}}#1}
+% A bar under a symbol (accents package); bbm's \mathbbm, now dsfont's letters
+\newcommand{\ubar}[1]{\underaccent{\bar}{#1}}
+\newcommand{\mathbbm}[1]{\mathds{#1}}
+
+\definecolor{Gray}{gray}{0.9}
+\newcolumntype{g}{>{\columncolor{Gray}}c}
+
+\onehalfspacing
+\frenchspacing

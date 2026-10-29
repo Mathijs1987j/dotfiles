@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+# GENERATED from config.org ("Foundations / Rebuild status"). Do not edit; edit config.org.
+# dotfiles-fingerprint: one checksum over everything Nix reads (flake.nix and
+# nix/, as git knows them). Equal fingerprints mean equal configurations.
+set -euo pipefail
+cd "$HOME/dotfiles"
+git ls-files -z -- flake.nix nix | sort -z | xargs -0 cat -- | sha256sum | cut -d' ' -f1

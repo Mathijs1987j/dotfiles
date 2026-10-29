@@ -1,0 +1,89 @@
+// GENERATED from config.org ("Desktop / Bar"). Do not edit; edit config.org.
+{
+  "layer": "top",
+  "position": "top",
+  "height": 28,
+  "reload_style_on_change": true,
+
+  // Workspaces only, no window titles or task list.
+  "modules-left": ["niri/workspaces"],
+  "modules-center": ["clock"],
+  "modules-right": [
+    "custom/dotfiles",
+    "systemd-failed-units",
+    "cpu",
+    "memory",
+    "disk",
+    "temperature",
+    "pulseaudio",
+    "backlight",
+    "network",
+    "battery",
+    "power-profiles-daemon",
+    "tray"
+  ],
+
+  // Named workspaces show their name ("web", "chat"), the others their number.
+  "niri/workspaces": { "format": "{value}" },
+
+  "clock": {
+    "format": "{:%a %d %b  %H:%M}",
+    "tooltip-format": "<tt>{calendar}</tt>"
+  },
+
+  // "rebuild" when the Nix files changed since the last rebuild (click to
+  // rebuild), and a note when a new NixOS release is out.
+  "custom/dotfiles": {
+    "exec": "$HOME/.local/bin/dotfiles-status",
+    "return-type": "json",
+    "interval": 60,
+    "on-click": "alacritty --hold -e rebuild"
+  },
+
+  // Hidden unless a service failed (for example the weekly update).
+  "systemd-failed-units": {
+    "hide-on-ok": true,
+    "format": "{nr_failed} failed",
+    "system": true,
+    "user": true
+  },
+
+  // System information.
+  "cpu": { "format": "cpu {usage}%", "interval": 5 },
+  "memory": {
+    "format": "mem {percentage}%",
+    "tooltip-format": "{used:0.1f} of {total:0.1f} GiB in use, swap {swapUsed:0.1f} GiB",
+    "interval": 10
+  },
+  "disk": {
+    "path": "/",
+    "format": "disk {free} free",
+    "tooltip-format": "{used} of {total} used on {path} ({percentage_used}%)",
+    "interval": 60
+  },
+  "temperature": {
+    "format": "{temperatureC}°C",
+    "critical-threshold": 85,
+    "interval": 10
+  },
+
+  "pulseaudio": {
+    "format": "vol {volume}%",
+    "format-muted": "vol muted",
+    "on-click": "pwvucontrol"
+  },
+  "backlight": { "format": "light {percent}%" },
+  "network": {
+    "format-wifi": "wifi {essid}",
+    "format-ethernet": "wired",
+    "format-disconnected": "offline",
+    "tooltip-format": "{ifname} {ipaddr}",
+    "on-click": "alacritty -e nmtui"
+  },
+  "battery": {
+    "format": "bat {capacity}%",
+    "format-charging": "bat+ {capacity}%",
+    "states": { "warning": 25, "critical": 10 }
+  },
+  "tray": { "spacing": 8 }
+}

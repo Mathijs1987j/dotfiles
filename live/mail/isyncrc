@@ -1,0 +1,25 @@
+# GENERATED from config.org ("Internet / Mail"). Do not edit; edit config.org.
+# mbsync: the work mailbox <-> ~/Mail/work
+IMAPAccount work
+Host outlook.office365.com
+Port 993
+User m.janssen@uva.nl
+PassCmd "oama access m.janssen@uva.nl"
+AuthMechs XOAUTH2
+TLSType IMAPS
+
+IMAPStore work-remote
+Account work
+
+MaildirStore work-local
+Path ~/Mail/work/
+Inbox ~/Mail/work/Inbox
+SubFolders Verbatim
+
+Channel work
+Far :work-remote:
+Near :work-local:
+Patterns *
+Create Near
+Expunge Both
+SyncState *

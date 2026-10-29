@@ -1,0 +1,7 @@
+# GENERATED from config.org ("Desktop / Notifications"). Do not edit; edit config.org.
+default-timeout=6000
+border-radius=6
+background-color=#1e1e2e
+text-color=#cdd6f4
+border-color=#89b4fa
+font=Inter 11
