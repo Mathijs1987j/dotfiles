@@ -26,16 +26,27 @@
   # Fewer writes to the USB disk: don't record when files were last read.
   fileSystems."/".options = [ "noatime" ];
 
-  # The EliteBook's built-in keyboard is broken: its left Ctrl key now and
-  # then sends a press without a release, so Linux thinks Ctrl is held down
-  # (on text screens m then acts as Enter and i as Tab). Ignore that one
-  # key of the built-in keyboard (scancode 1d, found with evtest). atkbd
-  # matches only built-in keyboards, never the external USB one. The
-  # KEYBOARD_KEY line needs exactly one space more than the evdev line;
-  # Nix removes the common indentation of the '' string.
+  # The EliteBook's built-in keyboard is broken: its left Ctrl and left Alt
+  # keys now and then send a press without a release, so Linux thinks the
+  # key is held down (with Ctrl, m acts as Enter and i as Tab; with Alt,
+  # every key becomes a shortcut). Use the external keyboard.
+  #
+  # 1. The desktop (niri, the lock screen, every program) ignores the
+  #    built-in keyboard completely. libinput, which niri uses for input,
+  #    skips devices marked LIBINPUT_IGNORE_DEVICE. The BIOS and the text
+  #    login prompt don't use libinput: there the keyboard still works.
+  services.udev.extraRules = ''
+    ACTION=="add|change", KERNEL=="event*", ATTRS{name}=="AT Translated Set 2 keyboard", ENV{LIBINPUT_IGNORE_DEVICE}="1"
+  '';
+  # 2. Where it still works, ignore the two bad keys: scancodes 1d (left
+  #    Ctrl) and 38 (left Alt), found with evtest. atkbd matches only
+  #    built-in keyboards, never the external USB one. Each KEYBOARD_KEY
+  #    line needs exactly one space more than the evdev line; Nix removes
+  #    the common indentation of the '' string.
   services.udev.extraHwdb = ''
     evdev:atkbd:dmi:*
      KEYBOARD_KEY_1d=reserved
+     KEYBOARD_KEY_38=reserved
   '';
 
   # No games here: the EliteBook's fan is broken and Civilization IV makes

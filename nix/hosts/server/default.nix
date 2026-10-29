@@ -9,10 +9,12 @@
 
   boot.loader.efi.canTouchEfiVariables = true;
 
-  # The EliteBook's left Ctrl key sticks; ignore it (see nixusb).
+  # The EliteBook's left Ctrl and left Alt keys stick; ignore them (see
+  # nixusb; a server has no desktop, so only this part applies).
   services.udev.extraHwdb = ''
     evdev:atkbd:dmi:*
      KEYBOARD_KEY_1d=reserved
+     KEYBOARD_KEY_38=reserved
   '';
 
   # A laptop as a server: keep running with the lid closed.
