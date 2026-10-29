@@ -1440,6 +1440,7 @@ you know its name (=niri msg outputs=).
 
 layout {
     gaps 12
+    background-color "transparent"   // show the wallpaper on workspaces too
     center-focused-column "never"
     preset-column-widths {      // Mod+R cycles through these
         proportion 0.33333
@@ -1472,9 +1473,12 @@ workspace "chat"
 
 *** Start-up and general
 
-The wallpaper starts here: NixOS's own Catppuccin Mocha artwork, which the
-section [[*Look: nix/desktop/look.nix][Look]] puts at =/etc/wallpaper.png= (another one: change the name
-there and rebuild). The layer rule shows it behind the overview (=Mod+O=)
+The wallpaper starts here. It is /state/, not configuration: whatever
+image is at =~/Pictures/wallpaper= (a copy, or a link to any picture; no
+extension needed), and if there is none, NixOS's own Catppuccin Mocha
+artwork, which the section [[*Look: nix/desktop/look.nix][Look]] puts at =/etc/wallpaper.png=. To change
+it: =ln -sf ~/Pictures/beach.jpg ~/Pictures/wallpaper=, then log in again
+(or =pkill swaybg= and run the command below in a terminal). The layer rule shows it behind the overview (=Mod+O=)
 too. The other session programs start from their own
 sections further down (notifications, idle, tray), and the bar, the Emacs
 daemon, the network applet and the polkit agent are services that systemd
@@ -1482,7 +1486,7 @@ starts with the session. Screenshots go to =~/Pictures/Screenshots= and the
 clipboard.
 
 #+begin_src kdl
-spawn-at-startup "swaybg" "-m" "fill" "-i" "/etc/wallpaper.png"
+spawn-at-startup "sh" "-c" r#"w="$HOME/Pictures/wallpaper"; [ -e "$w" ] || w=/etc/wallpaper.png; exec swaybg -m fill -i "$w""#
 
 layer-rule {
     match namespace="^wallpaper$"
