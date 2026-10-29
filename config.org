@@ -3368,7 +3368,7 @@ let
   launcher =
     name: script: settings: runtimeInputs:
     pkgs.writeShellApplication {
-      inherit name runtinmeInputs;
+      inherit name runtimeInputs;
       text =
         lib.concatStrings (lib.mapAttrsToList (k: v: "${k}=${lib.escapeShellArg v}\n") settings)
         + builtins.readFile ./games/common.sh
@@ -3646,6 +3646,7 @@ let
       (epkgs.treesit-grammars.with-grammars (g: [
         g.tree-sitter-python
         g.tree-sitter-javascript
+        g.tree-sitter-jsdoc # comments in JavaScript; js-ts-mode asks for it
         g.tree-sitter-css
         g.tree-sitter-html
         g.tree-sitter-json
@@ -4214,6 +4215,7 @@ reinstall.
 (setq treesit-language-source-alist
       '((python     "https://github.com/tree-sitter/tree-sitter-python")
         (javascript "https://github.com/tree-sitter/tree-sitter-javascript" nil "src")
+        (jsdoc      "https://github.com/tree-sitter/tree-sitter-jsdoc" nil "src")
         (css        "https://github.com/tree-sitter/tree-sitter-css")
         (html       "https://github.com/tree-sitter/tree-sitter-html")
         (json       "https://github.com/tree-sitter/tree-sitter-json")

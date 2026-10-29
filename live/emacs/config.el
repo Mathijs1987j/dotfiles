@@ -173,6 +173,7 @@
 (setq treesit-language-source-alist
       '((python     "https://github.com/tree-sitter/tree-sitter-python")
         (javascript "https://github.com/tree-sitter/tree-sitter-javascript" nil "src")
+        (jsdoc      "https://github.com/tree-sitter/tree-sitter-jsdoc" nil "src")
         (css        "https://github.com/tree-sitter/tree-sitter-css")
         (html       "https://github.com/tree-sitter/tree-sitter-html")
         (json       "https://github.com/tree-sitter/tree-sitter-json")

@@ -12,6 +12,7 @@ let
       (epkgs.treesit-grammars.with-grammars (g: [
         g.tree-sitter-python
         g.tree-sitter-javascript
+        g.tree-sitter-jsdoc # comments in JavaScript; js-ts-mode asks for it
         g.tree-sitter-css
         g.tree-sitter-html
         g.tree-sitter-json
