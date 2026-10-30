@@ -1,11 +1,11 @@
 // GENERATED from config.org ("Writing and teaching / Mathematical notation"). Do not edit; edit config.org.
 // mj-notation.js: the notation of MJPreamble.sty for reveal.js decks that
-// typeset maths with MathJax 3.2.1 or later, or MathJax 4.
+// typeset maths with MathJax 4 (or MathJax 3.2.1 or later).
 //
 //   <script src="mj-notation.js"></script>
-//   Reveal.initialize({ mathjax3: MJNotation.mathjax3(), plugins: [RevealMath.MathJax3] });
-// or, with MathJax 4 (recent reveal.js, such as 6.0):
 //   Reveal.initialize({ mathjax4: MJNotation.mathjax4(), plugins: [RevealMath.MathJax4] });
+// For an older deck with MathJax 3:
+//   Reveal.initialize({ mathjax3: MJNotation.mathjax3(), plugins: [RevealMath.MathJax3] });
 (function () {
   "use strict";
 
@@ -60,6 +60,9 @@
     config.loader = loader;
 
     const tex = Object.assign({}, config.tex);
+    // MathJax loads its braket extension by itself the first time it meets
+    // \set, and that extension's \set (no starred form) would replace ours.
+    tex.autoload = Object.assign({ braket: [] }, tex.autoload);
     if (Array.isArray(tex.packages)) {
       tex.packages = tex.packages.concat(["mathtools"]);
     } else {
@@ -93,5 +96,6 @@
     return config;
   }
 
-  window.MJNotation = { definitions: definitions, mathjax4: mathjax4, mathjax4: mathjax4 };
+  // The same options work for both versions.
+  window.MJNotation = { definitions: definitions, mathjax4: mathjax4, mathjax3: mathjax4 };
 })();

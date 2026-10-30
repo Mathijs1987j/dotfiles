@@ -2742,18 +2742,22 @@ The same names for MathJax.
 *** The file for reveal.js: live/slides/mj-notation.js
 
 A deck uses it in two lines: load the file, and let it fill in the MathJax
-options of reveal.js's math plugin. =MJNotation.mathjax3()= returns those
+options of reveal.js's math plugin (MathJax 4, reveal.js 5.2 or later).
+=MJNotation.mathjax4()= returns those
 options: it adds the mathtools extension and runs the definitions once,
 before the first equation is typeset, one definition at a time (so that a
 definition one MathJax version handles differently cannot stop the
 others). Your own MathJax options can be passed in, for example a local
-copy of MathJax: =MJNotation.mathjax3({ mathjax: "mathjax/tex-mml-chtml.js" })=.
-With MathJax 4 (recent reveal.js, such as 6.0) write =mathjax4: MJNotation.mathjax4()=
-and =RevealMath.MathJax4= instead; the options are the same.
+copy of MathJax, or another font:
+=MJNotation.mathjax4({ mathjax: "dist/mathjax/tex-mml-chtml.js", output: { font: "mathjax-stix2" } })=.
+Without the =mathjax= option, the plugin loads MathJax 4 from the internet.
+Older decks with MathJax 3 can use the same file:
+=mathjax3: MJNotation.mathjax3()= with =RevealMath.MathJax3=.
 
 #+begin_example
 <script src="dist/reveal.js"></script>
-<script src="plugin/math/math.js"></script>
+<script src="dist/plugin/math.js"></script>
+<script src="dist/plugin/notes.js"></script>
 <script src="mj-notation.js"></script>
 <script>
   Reveal.initialize({
@@ -2770,12 +2774,12 @@ it. The copy is a generated file like the others; its first line says so.
 #+begin_src js :tangle live/slides/mj-notation.js
 // GENERATED from config.org ("Writing and teaching / Mathematical notation"). Do not edit; edit config.org.
 // mj-notation.js: the notation of MJPreamble.sty for reveal.js decks that
-// typeset maths with MathJax 3.2.1 or later, or MathJax 4.
+// typeset maths with MathJax 4 (or MathJax 3.2.1 or later).
 //
 //   <script src="mj-notation.js"></script>
-//   Reveal.initialize({ mathjax3: MJNotation.mathjax3(), plugins: [RevealMath.MathJax3] });
-// or, with MathJax 4 (recent reveal.js, such as 6.0):
 //   Reveal.initialize({ mathjax4: MJNotation.mathjax4(), plugins: [RevealMath.MathJax4] });
+// For an older deck with MathJax 3:
+//   Reveal.initialize({ mathjax3: MJNotation.mathjax3(), plugins: [RevealMath.MathJax3] });
 (function () {
   "use strict";
 
@@ -2796,6 +2800,9 @@ it. The copy is a generated file like the others; its first line says so.
     config.loader = loader;
 
     const tex = Object.assign({}, config.tex);
+    // MathJax loads its braket extension by itself the first time it meets
+    // \set, and that extension's \set (no starred form) would replace ours.
+    tex.autoload = Object.assign({ braket: [] }, tex.autoload);
     if (Array.isArray(tex.packages)) {
       tex.packages = tex.packages.concat(["mathtools"]);
     } else {
@@ -2829,7 +2836,8 @@ it. The copy is a generated file like the others; its first line says so.
     return config;
   }
 
-  window.MJNotation = { definitions: definitions, mathjax4: mathjax4, mathjax4: mathjax4 };
+  // The same options work for both versions.
+  window.MJNotation = { definitions: definitions, mathjax4: mathjax4, mathjax3: mathjax4 };
 })();
 #+end_src
 
@@ -4471,9 +4479,9 @@ that expands it in a scratch buffer.
 (use-package yasnippet-snippets)
 #+end_src
 
-*** LaTeX: a new document with the preamble (=newdoc=)
+*** LaTeX: a new document with the preamble (=newd=)
 
-#+begin_src snippet :tangle live/emacs/snippets/latex-mode/newdoc
+#+begin_src snippet :tangle live/emacs/snippets/latex-mode/newd
 # -*- mode: snippet -*-
 # GENERATED from config.org ("Emacs / Snippets"). Do not edit; edit config.org.
 # name: new document with MJPreamble
@@ -4494,18 +4502,21 @@ $0
 \\end{document}
 #+end_src
 
-*** HTML: a reveal.js deck with the shared notation (=deck=)
+*** HTML: a reveal.js deck (=revs=)
 
-The notation comes from =mj-notation.js= (see [[*Mathematical notation: one source for LaTeX and slides][Mathematical notation]]), so the
-deck itself contains no backslashes and no MathJax macros.
+reveal.js 6 with its files in =dist/=, the course's =custom.css=, JSXGraph
+from the internet, and the notation from =mj-notation.js= (see
+[[*Mathematical notation: one source for LaTeX and slides][Mathematical notation]]) with MathJax 4, so the deck itself contains no
+backslashes and no MathJax macros. =mj-notation.js= and =custom.css= must
+be next to the deck.
 
-#+begin_src snippet :tangle live/emacs/snippets/web-mode/deck
+#+begin_src snippet :tangle live/emacs/snippets/web-mode/revs
 # -*- mode: snippet -*-
 # GENERATED from config.org ("Emacs / Snippets"). Do not edit; edit config.org.
 # name: Reveal Slides
 # key: revs
 # --
- <!doctype html>
+<!doctype html>
 <html lang="en">
   <head>
     <meta charset="utf-8" />
@@ -4536,22 +4547,22 @@ deck itself contains no backslashes and no MathJax macros.
     <div class="reveal">
       <div class="slides" style="font-size: 28px">
         <section>
-	$0
-	</section>
-       </div>
+          $0
+        </section>
+      </div>
     </div>
-  <script src="dist/reveal.js"></script>
-  <script src="plugin/math/math.js"></script>
-  <script src="plugin/notes/notes.js"></script>
-  <script src="mj-notation.js"></script>
-  <script>
-    Reveal.initialize({
-      hash: true,
-      mathjax4: MJNotation.mathjax4(),
-      plugins: [ RevealMath.MathJax4, RevealNotes ],
-    });
-  </script>
-</body>
+    <script src="dist/reveal.js"></script>
+    <script src="dist/plugin/math.js"></script>
+    <script src="dist/plugin/notes.js"></script>
+    <script src="mj-notation.js"></script>
+    <script>
+      Reveal.initialize({
+        hash: true,
+        mathjax4: MJNotation.mathjax4(),
+        plugins: [ RevealMath.MathJax4, RevealNotes ],
+      });
+    </script>
+  </body>
 </html>
 #+end_src
 

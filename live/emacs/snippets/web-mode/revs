@@ -3,7 +3,7 @@
 # name: Reveal Slides
 # key: revs
 # --
- <!doctype html>
+<!doctype html>
 <html lang="en">
   <head>
     <meta charset="utf-8" />
@@ -34,20 +34,20 @@
     <div class="reveal">
       <div class="slides" style="font-size: 28px">
         <section>
-	$0
-	</section>
-       </div>
+          $0
+        </section>
+      </div>
     </div>
-  <script src="dist/reveal.js"></script>
-  <script src="plugin/math/math.js"></script>
-  <script src="plugin/notes/notes.js"></script>
-  <script src="mj-notation.js"></script>
-  <script>
-    Reveal.initialize({
-      hash: true,
-      mathjax4: MJNotation.mathjax4(),
-      plugins: [ RevealMath.MathJax4, RevealNotes ],
-    });
-  </script>
-</body>
+    <script src="dist/reveal.js"></script>
+    <script src="dist/plugin/math.js"></script>
+    <script src="dist/plugin/notes.js"></script>
+    <script src="mj-notation.js"></script>
+    <script>
+      Reveal.initialize({
+        hash: true,
+        mathjax4: MJNotation.mathjax4(),
+        plugins: [ RevealMath.MathJax4, RevealNotes ],
+      });
+    </script>
+  </body>
 </html>
