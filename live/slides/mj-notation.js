@@ -52,7 +52,7 @@
   // MathJax options for the math plugin: load mathtools (for the self-sizing
   // brackets) and run the definitions once, before the page is typeset.
   // OPTIONS are your own MathJax options; they are kept.
-  function mathjax3(options) {
+  function mathjax4(options) {
     const config = Object.assign({}, options);
 
     const loader = Object.assign({}, config.loader);
@@ -93,5 +93,5 @@
     return config;
   }
 
-  window.MJNotation = { definitions: definitions, mathjax3: mathjax3, mathjax4: mathjax3 };
+  window.MJNotation = { definitions: definitions, mathjax4: mathjax4, mathjax4: mathjax4 };
 })();

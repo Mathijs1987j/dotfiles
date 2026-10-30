@@ -45,8 +45,8 @@
   <script>
     Reveal.initialize({
       hash: true,
-      mathjax3: MJNotation.mathjax3(),
-      plugins: [ RevealMath.MathJax3, RevealNotes ],
+      mathjax4: MJNotation.mathjax4(),
+      plugins: [ RevealMath.MathJax4, RevealNotes ],
     });
   </script>
 </body>

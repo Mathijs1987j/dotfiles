@@ -2757,8 +2757,8 @@ and =RevealMath.MathJax4= instead; the options are the same.
 <script src="mj-notation.js"></script>
 <script>
   Reveal.initialize({
-    mathjax3: MJNotation.mathjax3(),
-    plugins: [ RevealMath.MathJax3, RevealNotes ],
+    mathjax4: MJNotation.mathjax4(),
+    plugins: [ RevealMath.MathJax4, RevealNotes ],
   });
 </script>
 #+end_example
@@ -2788,7 +2788,7 @@ it. The copy is a generated file like the others; its first line says so.
   // MathJax options for the math plugin: load mathtools (for the self-sizing
   // brackets) and run the definitions once, before the page is typeset.
   // OPTIONS are your own MathJax options; they are kept.
-  function mathjax3(options) {
+  function mathjax4(options) {
     const config = Object.assign({}, options);
 
     const loader = Object.assign({}, config.loader);
@@ -2829,7 +2829,7 @@ it. The copy is a generated file like the others; its first line says so.
     return config;
   }
 
-  window.MJNotation = { definitions: definitions, mathjax3: mathjax3, mathjax4: mathjax3 };
+  window.MJNotation = { definitions: definitions, mathjax4: mathjax4, mathjax4: mathjax4 };
 })();
 #+end_src
 
@@ -4547,8 +4547,8 @@ deck itself contains no backslashes and no MathJax macros.
   <script>
     Reveal.initialize({
       hash: true,
-      mathjax3: MJNotation.mathjax3(),
-      plugins: [ RevealMath.MathJax3, RevealNotes ],
+      mathjax4: MJNotation.mathjax4(),
+      plugins: [ RevealMath.MathJax4, RevealNotes ],
     });
   </script>
 </body>
