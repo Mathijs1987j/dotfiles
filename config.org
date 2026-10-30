@@ -495,8 +495,12 @@ Three small commands in =live/bin/= (linked into =~/.local/bin=, which
 NixOS puts on the =PATH=; see [[*Shell: nix/core/shell.nix][Shell]]). Together they answer "does the
 running system match my configuration?":
 
-- =dotfiles-fingerprint= prints one checksum over everything Nix reads
-  (=flake.nix= and =nix/=, as git knows them);
+- =dotfiles-fingerprint= prints one checksum over everything Nix reads:
+  =flake.nix= and =nix/=, as git knows them, plus the lines of the Emacs
+  configuration that decide which Emacs packages Nix installs (every
+  =use-package= line and every =:ensure= line of =live/emacs/config.el=).
+  Only those lines: an ordinary Emacs setting needs no rebuild, but a new
+  package does;
 - =rebuild= rebuilds through nh and, when that succeeds, writes the
   fingerprint to =~/.local/state/dotfiles/built=;
 - =dotfiles-status= compares the two for the bar, and also reports a new
@@ -510,10 +514,14 @@ changes it and builds the result itself.
 #!/usr/bin/env bash
 # GENERATED from config.org ("Foundations / Rebuild status"). Do not edit; edit config.org.
 # dotfiles-fingerprint: one checksum over everything Nix reads (flake.nix and
-# nix/, as git knows them). Equal fingerprints mean equal configurations.
+# nix/, as git knows them, and the lines of config.el that name the Emacs
+# packages Nix installs). Equal fingerprints mean equal configurations.
 set -euo pipefail
 cd "$HOME/dotfiles"
-git ls-files -z -- flake.nix nix | sort -z | xargs -0 cat -- | sha256sum | cut -d' ' -f1
+{
+  git ls-files -z -- flake.nix nix | sort -z | xargs -0 cat --
+  grep -E '\(use-package |:ensure' live/emacs/config.el || true
+} | sha256sum | cut -d' ' -f1
 #+end_src
 
 =rebuild= takes nh's subcommands: =rebuild= (=switch=: build, activate, make
@@ -3681,6 +3689,7 @@ let
         g.tree-sitter-python
         g.tree-sitter-javascript
         g.tree-sitter-jsdoc # comments in JavaScript; js-ts-mode asks for it
+        g.tree-sitter-kdl # niri's settings, for kdl-mode
         g.tree-sitter-css
         g.tree-sitter-html
         g.tree-sitter-json
@@ -3862,7 +3871,11 @@ What happens when =config.org= is saved, in a file of its own so the
          (org-src-preserve-indentation t)
          (written (delete-dups
                    (mapcar #'expand-file-name
-                           (let ((inhibit-message t)) ; quiet: one report at the end
+                           ;; Quiet: one report at the end. Nothing in the
+                           ;; echo area, and nothing in *Messages* either
+                           ;; (opening each shell block logs three lines).
+                           (let ((inhibit-message t)
+                                 (message-log-max nil))
                              (org-babel-tangle-file MJ-config-file)))))
          (previous (MJ--read-manifest))
          (suspicious (and previous
@@ -4207,7 +4220,15 @@ corfu replaces company: the same automatic pop-up, built on Emacs's own
 completion system, which eglot, AUCTeX, Org and cape all feed. =cape-file=
 replaces =company-files=.
 
+Emacs 30 also offers dictionary words while typing prose
+(=text-mode-ispell-word-completion=). That needs a plain word list, which
+NixOS does not have at the usual place; each pop-up then failed with
+"No plain word-list found" in =*Messages*=. Spelling is jinx's job here, so
+that completion is switched off.
+
 #+begin_src emacs-lisp
+(setq text-mode-ispell-word-completion nil) ; no word-list completion in prose
+
 (use-package corfu
   :init (global-corfu-mode)
   :custom
@@ -4250,6 +4271,7 @@ reinstall.
       '((python     "https://github.com/tree-sitter/tree-sitter-python")
         (javascript "https://github.com/tree-sitter/tree-sitter-javascript" nil "src")
         (jsdoc      "https://github.com/tree-sitter/tree-sitter-jsdoc" nil "src")
+        (kdl        "https://github.com/tree-sitter-grammars/tree-sitter-kdl")
         (css        "https://github.com/tree-sitter/tree-sitter-css")
         (html       "https://github.com/tree-sitter/tree-sitter-html")
         (json       "https://github.com/tree-sitter/tree-sitter-json")
@@ -4676,6 +4698,22 @@ nil # Nix language server
 (use-package nix-ts-mode
   :if (MJ-treesit-ready-p 'nix)
   :mode "\\.nix\\'")
+#+end_src
+
+** KDL (niri's settings)
+
+=kdl-mode= colours niri's settings, in =live/niri/config.kdl= and when a
+KDL block of this file is opened with =C-c '= (without it, Emacs says
+"kdl-mode not available" and shows plain text). It is a tree-sitter mode:
+its grammar comes from Nix ([[*Packaging: nix/desktop/emacs.nix][Packaging]]); on Windows from
+=M-x MJ-treesit-install-missing=. Until the grammar is there, the mode is
+not used (otherwise it would try to compile the grammar itself, and fail
+without a C compiler).
+
+#+begin_src emacs-lisp
+(use-package kdl-mode
+  :if (MJ-treesit-ready-p 'kdl)
+  :mode "\\.kdl\\'")
 #+end_src
 
 ** LaTeX

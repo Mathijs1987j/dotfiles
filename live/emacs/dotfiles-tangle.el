@@ -103,7 +103,11 @@
          (org-src-preserve-indentation t)
          (written (delete-dups
                    (mapcar #'expand-file-name
-                           (let ((inhibit-message t)) ; quiet: one report at the end
+                           ;; Quiet: one report at the end. Nothing in the
+                           ;; echo area, and nothing in *Messages* either
+                           ;; (opening each shell block logs three lines).
+                           (let ((inhibit-message t)
+                                 (message-log-max nil))
                              (org-babel-tangle-file MJ-config-file)))))
          (previous (MJ--read-manifest))
          (suspicious (and previous

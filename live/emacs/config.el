@@ -153,6 +153,8 @@
 (use-package embark-consult
   :after (embark consult))
 
+(setq text-mode-ispell-word-completion nil) ; no word-list completion in prose
+
 (use-package corfu
   :init (global-corfu-mode)
   :custom
@@ -174,6 +176,7 @@
       '((python     "https://github.com/tree-sitter/tree-sitter-python")
         (javascript "https://github.com/tree-sitter/tree-sitter-javascript" nil "src")
         (jsdoc      "https://github.com/tree-sitter/tree-sitter-jsdoc" nil "src")
+        (kdl        "https://github.com/tree-sitter-grammars/tree-sitter-kdl")
         (css        "https://github.com/tree-sitter/tree-sitter-css")
         (html       "https://github.com/tree-sitter/tree-sitter-html")
         (json       "https://github.com/tree-sitter/tree-sitter-json")
@@ -340,6 +343,10 @@ older versions need the separate typescript-language-server."
 (use-package nix-ts-mode
   :if (MJ-treesit-ready-p 'nix)
   :mode "\\.nix\\'")
+
+(use-package kdl-mode
+  :if (MJ-treesit-ready-p 'kdl)
+  :mode "\\.kdl\\'")
 
 (use-package tex
   :ensure auctex
