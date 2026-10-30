@@ -4477,13 +4477,13 @@ that expands it in a scratch buffer.
 # -*- mode: snippet -*-
 # GENERATED from config.org ("Emacs / Snippets"). Do not edit; edit config.org.
 # name: new document with MJPreamble
-# key: newdoc
+# key: newd
 # --
 \\documentclass{article}
 \\usepackage${1:[dutch]}{MJPreamble}
 
 \\title{$2}
-\\author{Mathijs}
+\\author{Mathijs Janssen}
 \\date{\\today}
 
 \\begin{document}
@@ -4502,27 +4502,44 @@ deck itself contains no backslashes and no MathJax macros.
 #+begin_src snippet :tangle live/emacs/snippets/web-mode/deck
 # -*- mode: snippet -*-
 # GENERATED from config.org ("Emacs / Snippets"). Do not edit; edit config.org.
-# name: reveal.js deck with mj-notation.js
-# key: deck
+# name: Reveal Slides
+# key: revs
 # --
-<!doctype html>
-<html lang="${1:nl}">
-<head>
-  <meta charset="utf-8">
-  <title>${2:Title}</title>
-  <link rel="stylesheet" href="dist/reveal.css">
-  <link rel="stylesheet" href="dist/theme/${3:white}.css">
-  <link rel="stylesheet" href="custom.css">
-</head>
-<body>
-  <div class="reveal">
-    <div class="slides">
-      <section>
-        <h1>$2</h1>
-        $0
-      </section>
+ <!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
+    />
+
+    <title>${1:title}</title>
+
+    <link rel="stylesheet" href="dist/reset.css" />
+    <link rel="stylesheet" href="dist/reveal.css" />
+    <link rel="stylesheet" href="dist/theme/white.css" />
+
+    <!-- Theme used for syntax highlighted code -->
+    <link rel="stylesheet" href="dist/plugin/highlight/monokai.css" />
+
+    <link rel="stylesheet" href="custom.css" />
+
+    <!-- JSXGraph: used for the implicit-circle and Taylor approximation slides -->
+    <link
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/jsxgraph/distrib/jsxgraph.css"
+    />
+    <script src="https://cdn.jsdelivr.net/npm/jsxgraph/distrib/jsxgraphcore.js"></script>
+  </head>
+  <body>
+    <div class="reveal">
+      <div class="slides" style="font-size: 28px">
+        <section>
+	$0
+	</section>
+       </div>
     </div>
-  </div>
   <script src="dist/reveal.js"></script>
   <script src="plugin/math/math.js"></script>
   <script src="plugin/notes/notes.js"></script>
