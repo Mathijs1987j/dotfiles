@@ -22,12 +22,15 @@ input {
     focus-follows-mouse max-scroll-amount="0%"
 }
 
-// Displays. List yours with `niri msg outputs`, then for example:
-// output "eDP-1" { scale 1.25; }
+// The EliteBook's built-in screen: 15.6 inches, 1920x1080.
+output "InfoVision Optoelectronics (Kunshan) Co.,Ltd China 0x061C Unknown" {
+    scale 1.25
+}
+// The new laptop's screen: add its block here (name from `niri msg outputs`).
 
 layout {
     gaps 12
-    background-color "transparent"   // show the wallpaper on workspaces too
+    background-color "transparent" // show the wallpaper (in the backdrop) on workspaces too
     center-focused-column "never"
     preset-column-widths {      // Mod+R cycles through these
         proportion 0.33333
@@ -50,7 +53,7 @@ workspace "main"
 workspace "web"
 workspace "chat"
 
-spawn-at-startup "sh" "-c" r#"w="$HOME/Pictures/wallpaper"; [ -e "$w" ] || w=/etc/wallpaper.png; exec swaybg -m fill -i "$w""#
+spawn-at-startup "sh" "-c" r#"w="$HOME/Pictures/wallpaper"; [ -f "$w" ] || w=/etc/wallpaper.png; exec swaybg -m fill -i "$w""#
 
 layer-rule {
     match namespace="^wallpaper$"
