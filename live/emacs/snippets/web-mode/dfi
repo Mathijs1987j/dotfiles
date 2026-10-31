@@ -1,0 +1,6 @@
+# -*- mode: snippet -*-
+# GENERATED from config.org ("Emacs / Snippets"). Do not edit; edit config.org.
+# name: data-fragment-index
+# key: dfi
+# --
+data-fragment-index="$1"$0

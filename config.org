@@ -4598,6 +4598,15 @@ A snippet for creating normal form tables in html (works best with custom.css in
 </table>
 #+end_src
 
+Snippet for data-fragment-index
+#+begin_src snippet :tangle live/emacs/snippets/web-mode/dfi
+# -*- mode: snippet -*-
+# GENERATED from config.org ("Emacs / Snippets"). Do not edit; edit config.org.
+# name: data-fragment-index
+# key: dfi
+# --
+data-fragment-index="$1"$0
+#+end_src
 ** Formatting (Apheleia)
 
 Apheleia formats buffers on save: ruff for Python (replacing black: same
