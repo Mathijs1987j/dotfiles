@@ -4574,7 +4574,6 @@ A snippet for creating normal form tables in html (works best with custom.css in
 # name: Normal Form Game
 # key: nfg
 # --
-
 <table class="game">
   <tr>
     <th colspan="2"></th>
