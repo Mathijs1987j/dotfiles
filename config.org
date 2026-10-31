@@ -1,6 +1,6 @@
 #+TITLE: Configuration: NixOS, Emacs and LaTeX
 #+AUTHOR: MJ
-#+DATE: 2026-10-30
+#+DATE: 2026-10-31
 #+STARTUP: overview
 #+PROPERTY: header-args :mkdirp yes :noweb yes :eval no
 #+PROPERTY: header-args:emacs-lisp :tangle live/emacs/config.el :eval yes
@@ -4564,6 +4564,39 @@ be next to the deck.
     </script>
   </body>
 </html>
+#+end_src
+
+A snippet for creating normal form tables in html (works best with custom.css in reveal.js)
+
+#+begin_src snippet :tangle live/emacs/snippets/web-mode/nfg
+# -*- mode: snippet -*-
+# GENERATED from config.org ("Emacs / Snippets"). Do not edit; edit config.org.
+# name: Normal Form Game
+# key: nfg
+# --
+
+<table class="game">
+  <tr>
+    <th colspan="2"></th>
+    <th colspan="2">${2:Player 2}</th>
+  </tr>
+  <tr>
+    <th colspan="2"></th>
+    <th>${5:L}</th>
+    <th>${6:R}</th>
+  </tr>
+  <tr>
+    <th rowspan="2">${1:Player 1}</th>
+    <th>${3:U}</th>
+    <td>$7</td>
+    <td>$8</td>
+  </tr>
+  <tr>
+    <th>${4:D}</th>
+    <td>$9</td>
+    <td>${10}</td>
+  </tr>
+</table>
 #+end_src
 
 ** Formatting (Apheleia)
