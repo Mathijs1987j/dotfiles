@@ -45,6 +45,7 @@
     <script>
       Reveal.initialize({
         hash: true,
+	transition: "convex",
         mathjax4: MJNotation.mathjax4(),
         plugins: [ RevealMath.MathJax4, RevealNotes ],
       });
