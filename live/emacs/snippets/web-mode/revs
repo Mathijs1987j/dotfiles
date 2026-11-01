@@ -44,6 +44,8 @@
     <script src="mj-notation.js"></script>
     <script>
       Reveal.initialize({
+        width: 1560,
+	height: 720,
         hash: true,
 	transition: "convex",
         mathjax4: MJNotation.mathjax4(),
