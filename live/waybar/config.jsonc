@@ -10,14 +10,13 @@
   "modules-center": ["clock"],
   "modules-right": [
     "custom/dotfiles",
-    "systemd-failed-units",
+    "custom/failed",
     "cpu",
     "memory",
     "disk",
     "temperature",
     "pulseaudio",
     "backlight",
-    "network",
     "battery",
     "power-profiles-daemon",
     "tray"
@@ -40,12 +39,16 @@
     "on-click": "alacritty --hold -e rebuild"
   },
 
-  // Hidden unless a service failed (for example the weekly update).
-  "systemd-failed-units": {
-    "hide-on-ok": true,
-    "format": "{nr_failed} failed",
-    "system": true,
-    "user": true
+  // Failed services, system and session: hidden while there are none.
+  // Hover for their names; click for systemd's own report. (Waybar's own
+  // systemd-failed-units module could stay at "0 failed" after login: it
+  // checks systemd's state when it starts, while the session is still
+  // starting, and is not told when that ends.)
+  "custom/failed": {
+    "exec": "$HOME/dotfiles/live/bin/failed-units",
+    "return-type": "json",
+    "interval": 60,
+    "on-click": "alacritty --hold -e sh -c 'systemctl --failed; systemctl --user --failed'"
   },
 
   // System information.
@@ -73,16 +76,15 @@
     "on-click": "pwvucontrol"
   },
   "backlight": { "format": "light {percent}%" },
-  "network": {
-    "format-wifi": "wifi {essid}",
-    "format-ethernet": "wired",
-    "format-disconnected": "offline",
-    "tooltip-format": "{ifname} {ipaddr}",
-    "on-click": "alacritty -e nmtui"
-  },
+  // The battery as an icon that empties in five steps (from the Nerd Font);
+  // a bolt while charging, a plug when full on the adapter. Hover for the
+  // exact percentage and the time to empty or full.
   "battery": {
-    "format": "bat {capacity}%",
-    "format-charging": "bat+ {capacity}%",
+    "format": "{icon}",
+    "format-charging": "{icon} \uf0e7",
+    "format-plugged": "{icon} \uf1e6",
+    "format-icons": ["\uf244", "\uf243", "\uf242", "\uf241", "\uf240"],
+    "tooltip-format": "{capacity}%, {timeTo}",
     "states": { "warning": 25, "critical": 10 }
   },
   "tray": { "spacing": 8 }

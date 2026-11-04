@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+# GENERATED from config.org ("Desktop / Bar"). Do not edit; edit config.org.
+# failed-units: one line of JSON for Waybar's custom/failed: how many system
+# and session services have failed, and their names; empty when none have.
+units=$(
+  {
+    systemctl --failed --plain --no-legend
+    systemctl --user --failed --plain --no-legend
+  } | awk '{ print $1 }'
+)
+if [ -z "$units" ]; then
+  echo '{"text": ""}'
+  exit 0
+fi
+count=$(printf '%s\n' "$units" | wc -l)
+names=$(printf '%s\n' "$units" | awk 'NR > 1 { printf "\\n" } { printf "%s", $0 }')
+printf '{"text": "%s failed", "tooltip": "%s", "class": "failed"}\n' "$count" "$names"

@@ -32,7 +32,7 @@ output "BOE NE153QDM-NZ2 Unknown" {
 }
 
 layout {
-    gaps 12
+    gaps 2
     background-color "transparent" // show the wallpaper (in the backdrop) on workspaces too
     center-focused-column "never"
     preset-column-widths {      // Mod+R cycles through these

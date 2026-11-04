@@ -599,7 +599,7 @@ You never have to remember to update, and an update never lands in the
 middle of a lesson: it arrives at the next boot, and the previous version
 stays in the boot menu. =sudo systemctl start dotfiles-update= runs it now;
 =journalctl -u dotfiles-update= shows what it did. A failure shows up in
-the bar (=systemd-failed-units=).
+the bar (the red "failed" item).
 
 The service builds what is in =~/dotfiles= at that moment, including
 uncommitted changes, just like =rebuild=.
@@ -1460,7 +1460,7 @@ output "BOE NE153QDM-NZ2 Unknown" {
 }
 
 layout {
-    gaps 12
+    gaps 2
     background-color "transparent" // show the wallpaper (in the backdrop) on workspaces too
     center-focused-column "never"
     preset-column-widths {      // Mod+R cycles through these
@@ -1849,7 +1849,10 @@ a failed weekly update), then system information and the tray.
 
 Every item is a /module/. Each accepts =format=, =tooltip-format=,
 =on-click=, =interval= (seconds); =custom/...= modules show the output of
-any command. The temperature module reads the first "thermal zone"; if it
+any command. Wi-Fi has no module of its own: the network icon in the tray
+(nm-applet) shows the connection and opens the list of networks. The
+battery is an icon in five steps, with the exact figures on hovering. The
+temperature module reads the first "thermal zone"; if it
 shows a strange value, pick the processor's sensor (=thermal-zone= or
 =hwmon-path=).
 
@@ -1866,14 +1869,13 @@ shows a strange value, pick the processor's sensor (=thermal-zone= or
   "modules-center": ["clock"],
   "modules-right": [
     "custom/dotfiles",
-    "systemd-failed-units",
+    "custom/failed",
     "cpu",
     "memory",
     "disk",
     "temperature",
     "pulseaudio",
     "backlight",
-    "network",
     "battery",
     "power-profiles-daemon",
     "tray"
@@ -1896,12 +1898,16 @@ shows a strange value, pick the processor's sensor (=thermal-zone= or
     "on-click": "alacritty --hold -e rebuild"
   },
 
-  // Hidden unless a service failed (for example the weekly update).
-  "systemd-failed-units": {
-    "hide-on-ok": true,
-    "format": "{nr_failed} failed",
-    "system": true,
-    "user": true
+  // Failed services, system and session: hidden while there are none.
+  // Hover for their names; click for systemd's own report. (Waybar's own
+  // systemd-failed-units module could stay at "0 failed" after login: it
+  // checks systemd's state when it starts, while the session is still
+  // starting, and is not told when that ends.)
+  "custom/failed": {
+    "exec": "$HOME/dotfiles/live/bin/failed-units",
+    "return-type": "json",
+    "interval": 60,
+    "on-click": "alacritty --hold -e sh -c 'systemctl --failed; systemctl --user --failed'"
   },
 
   // System information.
@@ -1929,20 +1935,47 @@ shows a strange value, pick the processor's sensor (=thermal-zone= or
     "on-click": "pwvucontrol"
   },
   "backlight": { "format": "light {percent}%" },
-  "network": {
-    "format-wifi": "wifi {essid}",
-    "format-ethernet": "wired",
-    "format-disconnected": "offline",
-    "tooltip-format": "{ifname} {ipaddr}",
-    "on-click": "alacritty -e nmtui"
-  },
+  // The battery as an icon that empties in five steps (from the Nerd Font);
+  // a bolt while charging, a plug when full on the adapter. Hover for the
+  // exact percentage and the time to empty or full.
   "battery": {
-    "format": "bat {capacity}%",
-    "format-charging": "bat+ {capacity}%",
+    "format": "{icon}",
+    "format-charging": "{icon} \uf0e7",
+    "format-plugged": "{icon} \uf1e6",
+    "format-icons": ["\uf244", "\uf243", "\uf242", "\uf241", "\uf240"],
+    "tooltip-format": "{capacity}%, {timeTo}",
     "states": { "warning": 25, "critical": 10 }
   },
   "tray": { "spacing": 8 }
 }
+#+end_src
+
+*** Failed services: live/bin/failed-units
+
+The bar's warning about failed services (a background service that stopped
+with an error, for example the weekly update). It asks systemd every minute,
+for the system and for your session, and prints nothing when nothing has
+failed, which hides the item. The bar runs it straight from the repository,
+so a change here needs no rebuild.
+
+#+begin_src sh :tangle live/bin/failed-units :tangle-mode o755
+#!/usr/bin/env bash
+# GENERATED from config.org ("Desktop / Bar"). Do not edit; edit config.org.
+# failed-units: one line of JSON for Waybar's custom/failed: how many system
+# and session services have failed, and their names; empty when none have.
+units=$(
+  {
+    systemctl --failed --plain --no-legend
+    systemctl --user --failed --plain --no-legend
+  } | awk '{ print $1 }'
+)
+if [ -z "$units" ]; then
+  echo '{"text": ""}'
+  exit 0
+fi
+count=$(printf '%s\n' "$units" | wc -l)
+names=$(printf '%s\n' "$units" | awk 'NR > 1 { printf "\\n" } { printf "%s", $0 }')
+printf '{"text": "%s failed", "tooltip": "%s", "class": "failed"}\n' "$count" "$names"
 #+end_src
 
 *** Look: live/waybar/style.css
@@ -1954,10 +1987,10 @@ window#waybar { background: alpha(#<<base>>, 0.92); color: #<<text>>; }
 #workspaces button { padding: 0 6px; color: #<<subtext>>; }
 #workspaces button.active { color: #<<blue>>; border-bottom: 2px solid #<<blue>>; }
 #clock, #cpu, #memory, #disk, #temperature, #pulseaudio, #backlight,
-#network, #battery, #power-profiles-daemon, #tray,
-#custom-dotfiles, #systemd-failed-units { padding: 0 9px; }
+#battery, #power-profiles-daemon, #tray,
+#custom-dotfiles, #custom-failed { padding: 0 9px; }
 #cpu, #memory, #disk, #temperature { color: #<<subtext>>; }
-#temperature.critical, #battery.critical, #systemd-failed-units { color: #<<red>>; }
+#temperature.critical, #battery.critical, #custom-failed { color: #<<red>>; }
 #battery.warning, #custom-dotfiles { color: #<<yellow>>; }
 #+end_src
 

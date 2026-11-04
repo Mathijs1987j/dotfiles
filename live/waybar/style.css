@@ -4,8 +4,8 @@ window#waybar { background: alpha(#1e1e2e, 0.92); color: #cdd6f4; }
 #workspaces button { padding: 0 6px; color: #a6adc8; }
 #workspaces button.active { color: #89b4fa; border-bottom: 2px solid #89b4fa; }
 #clock, #cpu, #memory, #disk, #temperature, #pulseaudio, #backlight,
-#network, #battery, #power-profiles-daemon, #tray,
-#custom-dotfiles, #systemd-failed-units { padding: 0 9px; }
+#battery, #power-profiles-daemon, #tray,
+#custom-dotfiles, #custom-failed { padding: 0 9px; }
 #cpu, #memory, #disk, #temperature { color: #a6adc8; }
-#temperature.critical, #battery.critical, #systemd-failed-units { color: #f38ba8; }
+#temperature.critical, #battery.critical, #custom-failed { color: #f38ba8; }
 #battery.warning, #custom-dotfiles { color: #f9e2af; }
