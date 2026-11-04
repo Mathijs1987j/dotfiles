@@ -27,6 +27,9 @@ output "InfoVision Optoelectronics (Kunshan) Co.,Ltd China 0x061C Unknown" {
     scale 1.25
 }
 // The new laptop's screen: add its block here (name from `niri msg outputs`).
+output "BOE NE153QDM-NZ2 Unknown" {
+    scale 1.75
+}
 
 layout {
     gaps 12
