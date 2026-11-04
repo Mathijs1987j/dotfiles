@@ -507,6 +507,11 @@ running system match my configuration?":
   NixOS release (see [[*Weekly updates: nix/core/updates.nix][Weekly updates]]). Saving this file in Emacs asks the
   same question.
 
+The bar asks every minute, but it need not wait: saving this file and a
+finished =rebuild= both tell it to ask at once, by sending Waybar signal 8
+(=pkill -RTMIN+8 waybar=; the bar's item has ="signal": 8=). So "rebuild"
+appears as you save, and disappears as the rebuild ends.
+
 =flake.lock= is deliberately not part of the fingerprint: the weekly update
 changes it and builds the result itself.
 
@@ -548,6 +553,7 @@ if [ "$mode" != build ]; then
   state="${XDG_STATE_HOME:-$HOME/.local/state}/dotfiles"
   mkdir -p "$state"
   "$HOME/.local/bin/dotfiles-fingerprint" > "$state/built"
+  pkill -RTMIN+8 waybar || true # the bar checks again now
 fi
 #+end_src
 
@@ -1829,13 +1835,41 @@ status items that are hidden when there is nothing to say (the
 configuration's status from [[*Rebuild status][Rebuild status]], and failed services, such as
 a failed weekly update), then system information and the tray.
 
+Waybar needs the ordinary =PATH=. NixOS starts every systemd user service
+with a deliberately minimal one (coreutils, grep, sed and systemd only), and
+under it the bar's own scripts cannot start (=bash= is missing), so those
+items stay hidden. The same goes for the click actions (=alacritty=,
+=pwvucontrol=). The line below gives Waybar the =PATH= a terminal has.
+
+A click opens a terminal that stays open when the command has finished,
+so you can read the result; it ends with "Press Enter to close", and has no
+prompt of its own. While it is open, that item is not updated: Waybar
+waits for the program it started. Press Enter and the item updates at once.
+
+A rebuild that changes Waybar's service (as this =PATH= line did when it
+was added) restarts Waybar by itself: switching to a new system restarts
+every changed service, and since NixOS 26.05 your own user services too.
+The two live files are not part of the service, so changing them never
+does; =config.jsonc= still needs =systemctl --user restart waybar=.
+
 #+begin_src nix
 # GENERATED from config.org ("Desktop / Bar"). Do not edit; edit config.org.
 # nix/desktop/waybar.nix: Waybar as a user service, and its settings files.
-{ ... }:
+{ lib, username, ... }:
 
 {
   programs.waybar.enable = true; # a systemd user service with the session
+
+  # The PATH of a terminal, instead of the minimal one of user services:
+  # ~/.local/bin (rebuild, dotfiles-status), then the system's programs.
+  systemd.user.services.waybar.environment.PATH = lib.mkForce (
+    lib.concatStringsSep ":" [
+      "/home/${username}/.local/bin"
+      "/run/wrappers/bin"
+      "/etc/profiles/per-user/${username}/bin"
+      "/run/current-system/sw/bin"
+    ]
+  );
 
   dotfiles.links = {
     ".config/waybar/config.jsonc" = "live/waybar/config.jsonc";
@@ -1895,7 +1929,8 @@ shows a strange value, pick the processor's sensor (=thermal-zone= or
     "exec": "$HOME/.local/bin/dotfiles-status",
     "return-type": "json",
     "interval": 60,
-    "on-click": "alacritty --hold -e rebuild"
+    "signal": 8, // pkill -RTMIN+8 waybar: check now (rebuild and saving do)
+    "on-click": "alacritty -e sh -c 'rebuild; printf \"\\nDone. Press Enter to close. \"; read _'"
   },
 
   // Failed services, system and session: hidden while there are none.
@@ -1907,7 +1942,7 @@ shows a strange value, pick the processor's sensor (=thermal-zone= or
     "exec": "$HOME/dotfiles/live/bin/failed-units",
     "return-type": "json",
     "interval": 60,
-    "on-click": "alacritty --hold -e sh -c 'systemctl --failed; systemctl --user --failed'"
+    "on-click": "alacritty -e sh -c 'systemctl --failed; systemctl --user --failed; printf \"\\nPress Enter to close. \"; read _'"
   },
 
   // System information.
@@ -3956,6 +3991,9 @@ What happens when =config.org= is saved, in a file of its own so the
       (push "far fewer files than last time, so nothing was removed" parts))
     (let ((status (MJ--rebuild-status)))
       (when status (push status parts)))
+    ;; The bar checks again now ("signal": 8 in its settings).
+    (when (and (eq system-type 'gnu/linux) (executable-find "pkill"))
+      (call-process "pkill" nil 0 nil "-RTMIN+8" "waybar"))
     (let ((niri (MJ--check-niri)))
       (when niri (push niri parts)))
     (let ((report (mapconcat #'identity (nreverse parts) "; ")))

@@ -144,6 +144,9 @@
       (push "far fewer files than last time, so nothing was removed" parts))
     (let ((status (MJ--rebuild-status)))
       (when status (push status parts)))
+    ;; The bar checks again now ("signal": 8 in its settings).
+    (when (and (eq system-type 'gnu/linux) (executable-find "pkill"))
+      (call-process "pkill" nil 0 nil "-RTMIN+8" "waybar"))
     (let ((niri (MJ--check-niri)))
       (when niri (push niri parts)))
     (let ((report (mapconcat #'identity (nreverse parts) "; ")))

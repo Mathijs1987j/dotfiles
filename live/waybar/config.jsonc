@@ -36,7 +36,8 @@
     "exec": "$HOME/.local/bin/dotfiles-status",
     "return-type": "json",
     "interval": 60,
-    "on-click": "alacritty --hold -e rebuild"
+    "signal": 8, // pkill -RTMIN+8 waybar: check now (rebuild and saving do)
+    "on-click": "alacritty -e sh -c 'rebuild; printf \"\\nDone. Press Enter to close. \"; read _'"
   },
 
   // Failed services, system and session: hidden while there are none.
@@ -48,7 +49,7 @@
     "exec": "$HOME/dotfiles/live/bin/failed-units",
     "return-type": "json",
     "interval": 60,
-    "on-click": "alacritty --hold -e sh -c 'systemctl --failed; systemctl --user --failed'"
+    "on-click": "alacritty -e sh -c 'systemctl --failed; systemctl --user --failed; printf \"\\nPress Enter to close. \"; read _'"
   },
 
   // System information.

@@ -15,4 +15,5 @@ if [ "$mode" != build ]; then
   state="${XDG_STATE_HOME:-$HOME/.local/state}/dotfiles"
   mkdir -p "$state"
   "$HOME/.local/bin/dotfiles-fingerprint" > "$state/built"
+  pkill -RTMIN+8 waybar || true # the bar checks again now
 fi
