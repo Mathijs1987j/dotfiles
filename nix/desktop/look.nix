@@ -22,6 +22,7 @@
         gtk-theme = "adw-gtk3-dark";
         icon-theme = "Adwaita";
         cursor-theme = "Adwaita";
+        gtk-key-theme = "Emacs"; # Emacs keys in text fields
       };
     }
   ];

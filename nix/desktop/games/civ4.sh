@@ -15,7 +15,7 @@ if [ ! -e "$WINEPREFIX/.installed" ]; then
   echo "Creating the Wine prefix, with msxml3 and d3dx9 (needs the internet) ..."
   mkdir -p "$(dirname "$WINEPREFIX")"
   wineboot --init
-  winetricks -q sandbox msxml3 d3dx9
+  winetricks -q isolate_home msxml3 d3dx9
   echo "Running GOG's installer ..."
   wine "$setup" /VERYSILENT /SUPPRESSMSGBOXES /NORESTART /DIR="$game_windows"
   wineserver --wait

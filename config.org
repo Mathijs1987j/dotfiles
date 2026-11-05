@@ -1,6 +1,6 @@
 #+TITLE: Configuration: NixOS, Emacs and LaTeX
 #+AUTHOR: MJ
-#+DATE: 2026-11-04
+#+DATE: 2026-11-05
 #+STARTUP: overview
 #+PROPERTY: header-args :mkdirp yes :noweb yes :eval no
 #+PROPERTY: header-args:emacs-lisp :tangle live/emacs/config.el :eval yes
@@ -2216,6 +2216,14 @@ dconf setting that GTK4 programs and LibreWolf read through the portal. The
 two Qt programs (MuseScore, Shotcut) have dark themes of their own, chosen
 in their settings. The cursor is Adwaita, set for niri and for GTK.
 
+Text fields in GTK3 programs, LibreWolf's included, use Emacs keys: =C-a=
+and =C-e= for the start and end of the line, =C-f=, =C-b=, =M-f=, =M-b= to
+move, =C-k= to kill to the end of the line, =C-w= and =M-d= to delete a word,
+=C-n=/=C-p= for the next and previous line. While you type in a field these
+win over the browser's own shortcuts; outside a field, =C-w= still closes
+the tab and =C-a= still selects everything. A change takes effect when the
+program next starts. (GTK4 programs no longer have key themes.)
+
 The dconf values here are /defaults/: a program that changes them writes
 your own value on top, which wins.
 
@@ -2244,6 +2252,7 @@ your own value on top, which wins.
         gtk-theme = "adw-gtk3-dark";
         icon-theme = "Adwaita";
         cursor-theme = "Adwaita";
+        gtk-key-theme = "Emacs"; # Emacs keys in text fields
       };
     }
   ];
@@ -2262,6 +2271,7 @@ gtk-theme-name=adw-gtk3-dark
 gtk-icon-theme-name=Adwaita
 gtk-cursor-theme-name=Adwaita
 gtk-cursor-theme-size=24
+gtk-key-theme-name=Emacs
 gtk-font-name=<<font-ui>> 11
 gtk-application-prefer-dark-theme=1
 #+end_src
@@ -2273,7 +2283,6 @@ gtk-icon-theme-name=Adwaita
 gtk-cursor-theme-name=Adwaita
 gtk-cursor-theme-size=24
 gtk-font-name=<<font-ui>> 11
-gtk-application-prefer-dark-theme=1
 #+end_src
 
 #+begin_src kdl
@@ -3662,7 +3671,7 @@ well, from players' experience: a 32-bit prefix (with Nix's 32-bit Wine,
 game crashes at certain moments without it, e.g. when building Stonehenge)
 and =d3dx9= (tile yields display correctly), and the =C= locale (the game
 misreads numbers in some languages). The first start does all of this, with
-=winetricks sandbox= first, so the prefix's "Documents" is a folder of its
+=winetricks isolate_home= first, so the prefix's "Documents" is a folder of its
 own instead of a link to yours. Then GOG's installer runs silently.
 
 *BUG* goes into =My Games\Beyond the Sword= inside the prefix (its
@@ -3693,7 +3702,7 @@ if [ ! -e "$WINEPREFIX/.installed" ]; then
   echo "Creating the Wine prefix, with msxml3 and d3dx9 (needs the internet) ..."
   mkdir -p "$(dirname "$WINEPREFIX")"
   wineboot --init
-  winetricks -q sandbox msxml3 d3dx9
+  winetricks -q isolate_home msxml3 d3dx9
   echo "Running GOG's installer ..."
   wine "$setup" /VERYSILENT /SUPPRESSMSGBOXES /NORESTART /DIR="$game_windows"
   wineserver --wait
