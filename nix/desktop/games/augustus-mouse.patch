@@ -1,0 +1,44 @@
+GENERATED from config.org ("Games / Augustus mouse fix"). Do not edit; edit config.org.
+diff --git a/src/platform/augustus.c b/src/platform/augustus.c
+--- a/src/platform/augustus.c
++++ b/src/platform/augustus.c
+@@ -1,5 +1,6 @@
+ #include "SDL.h"
+ 
++#include "core/calc.h"
+ #include "core/config.h"
+ #include "core/encoding.h"
+ #include "core/file.h"
+@@ -194,10 +195,22 @@ static void run_and_draw(void)
+     platform_renderer_render();
+ }
+ 
++// sdl2-compat does not reliably convert the coordinates in mouse events to the
++// game's scaled pixels (Augustus issue #1226). Ignore them: read the pointer's
++// window position and scale it here, as mouse.c already does for relative mode.
++static void set_mouse_position_from_window(void)
++{
++    int x, y;
++    SDL_GetMouseState(&x, &y);
++    int scale_percentage = calc_percentage(100, platform_screen_get_scale());
++    mouse_set_position(calc_adjust_with_percentage(x, scale_percentage),
++                       calc_adjust_with_percentage(y, scale_percentage));
++}
++
+ static void handle_mouse_button(SDL_MouseButtonEvent *event, int is_down)
+ {
+     if (!SDL_GetRelativeMouseMode()) {
+-        mouse_set_position(event->x, event->y);
++        set_mouse_position_from_window();
+     }
+     if (event->button == SDL_BUTTON_LEFT) {
+         mouse_set_left_down(is_down);
+@@ -303,7 +316,7 @@ static void handle_event(SDL_Event *event)
+             break;
+         case SDL_MOUSEMOTION:
+             if (event->motion.which != SDL_TOUCH_MOUSEID && !SDL_GetRelativeMouseMode()) {
+-                mouse_set_position(event->motion.x, event->motion.y);
++                set_mouse_position_from_window();
+             }
+             break;
+         case SDL_MOUSEBUTTONDOWN:

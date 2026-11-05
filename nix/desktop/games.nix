@@ -33,11 +33,16 @@ let
       categories = [ "Game" ];
     };
 
+  # Augustus with the mouse fix for sdl2-compat (see "Augustus mouse fix").
+  augustus = pkgs.augustus.overrideAttrs (old: {
+    patches = (old.patches or [ ]) ++ [ ./games/augustus-mouse.patch ];
+  });
+
   caesar3 = launcher "caesar3" ./games/caesar3.sh {
     inherit installers;
     installer = cfg.caesar3.installer;
     sha256 = cfg.caesar3.sha256;
-  } (with pkgs; [ augustus innoextract coreutils findutils ]);
+  } [ augustus pkgs.innoextract pkgs.coreutils pkgs.findutils ];
 
   civ4 = launcher "civ4" ./games/civ4.sh {
     inherit installers;
@@ -45,7 +50,7 @@ let
     sha256 = cfg.civ4.sha256;
     bug = cfg.civ4.bug;
     bug_sha256 = cfg.civ4.bugSha256;
-  } (with pkgs; [ winePackages.stable winetricks coreutils findutils unzip cabextract ]);
+  } (with pkgs; [ winePackages.stable winetricks coreutils findutils unzip cabextract gnused ]);
 in
 {
   options.games = {
@@ -96,6 +101,8 @@ in
         caesar3
         (entry "caesar3" "Caesar III")
       ];
+      # Scale and pointer size, read at every start (see "Caesar III").
+      dotfiles.links.".config/caesar3/caesar3.conf" = "live/caesar3/caesar3.conf";
     })
     (lib.mkIf cfg.civ4.enable {
       hardware.graphics.enable32Bit = true; # 32-bit graphics for a 32-bit game
@@ -103,6 +110,8 @@ in
         civ4
         (entry "civ4" "Civilization IV: Beyond the Sword")
       ];
+      # Resolution and fullscreen, read at every start (see "Civilization IV").
+      dotfiles.links.".config/civ4/civ4.conf" = "live/civ4/civ4.conf";
     })
   ];
 }

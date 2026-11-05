@@ -3514,11 +3514,16 @@ let
       categories = [ "Game" ];
     };
 
+  # Augustus with the mouse fix for sdl2-compat (see "Augustus mouse fix").
+  augustus = pkgs.augustus.overrideAttrs (old: {
+    patches = (old.patches or [ ]) ++ [ ./games/augustus-mouse.patch ];
+  });
+
   caesar3 = launcher "caesar3" ./games/caesar3.sh {
     inherit installers;
     installer = cfg.caesar3.installer;
     sha256 = cfg.caesar3.sha256;
-  } (with pkgs; [ augustus innoextract coreutils findutils ]);
+  } [ augustus pkgs.innoextract pkgs.coreutils pkgs.findutils ];
 
   civ4 = launcher "civ4" ./games/civ4.sh {
     inherit installers;
@@ -3526,7 +3531,7 @@ let
     sha256 = cfg.civ4.sha256;
     bug = cfg.civ4.bug;
     bug_sha256 = cfg.civ4.bugSha256;
-  } (with pkgs; [ winePackages.stable winetricks coreutils findutils unzip cabextract ]);
+  } (with pkgs; [ winePackages.stable winetricks coreutils findutils unzip cabextract gnused ]);
 in
 {
   options.games = {
@@ -3577,6 +3582,8 @@ in
         caesar3
         (entry "caesar3" "Caesar III")
       ];
+      # Scale and pointer size, read at every start (see "Caesar III").
+      dotfiles.links.".config/caesar3/caesar3.conf" = "live/caesar3/caesar3.conf";
     })
     (lib.mkIf cfg.civ4.enable {
       hardware.graphics.enable32Bit = true; # 32-bit graphics for a 32-bit game
@@ -3584,6 +3591,8 @@ in
         civ4
         (entry "civ4" "Civilization IV: Beyond the Sword")
       ];
+      # Resolution and fullscreen, read at every start (see "Civilization IV").
+      dotfiles.links.".config/civ4/civ4.conf" = "live/civ4/civ4.conf";
     })
   ];
 }
@@ -3634,6 +3643,25 @@ Augustus runs from there and keeps your saved games in it: that folder is
 the game's state. Copy saved games (=*.sav=) from your Windows installation
 into it.
 
+*Settings without a rebuild.* The interface scale and the pointer size are
+in =live/caesar3/caesar3.conf=, linked to =~/.config/caesar3/caesar3.conf=.
+The launcher reads that file at every start and passes the values to
+Augustus, so a change here applies the next time you start the game: save,
+no rebuild. A value left empty means the setting from the game's own menu
+(kept in =augustus.ini= in the game folder, which is state). A value set here
+wins over the menu at the next start.
+
+#+begin_src sh :tangle live/caesar3/caesar3.conf
+# GENERATED from config.org ("Games / Caesar III"). Do not edit; edit config.org.
+# caesar3.conf: read by the caesar3 launcher at every start; no rebuild needed.
+# display_scale: size of the interface, 1 = 100%, from 0.5 to 5; decimals such
+#   as 1.5 or 1.75 are fine.
+# cursor_scale: size of the mouse pointer: 1, 1.5 or 2.
+# Empty: use the setting from the game's own menu.
+display_scale=2
+cursor_scale=
+#+end_src
+
 #+begin_src sh :tangle nix/desktop/games/caesar3.sh
 # GENERATED from config.org ("Games / Caesar III"). Do not edit; edit config.org.
 # caesar3: Caesar III through Augustus. The first start unpacks the game
@@ -3659,7 +3687,88 @@ if [ ! -e "$data/.installed" ]; then
   touch "$data/.installed"
 fi
 
-exec augustus "$data"
+# Scale and pointer size from live/caesar3/caesar3.conf, read at every start.
+display_scale=""
+cursor_scale=""
+conf="${XDG_CONFIG_HOME:-$HOME/.config}/caesar3/caesar3.conf"
+if [ -f "$conf" ]; then
+  # shellcheck source=/dev/null
+  . "$conf"
+fi
+args=()
+if [ -n "$display_scale" ]; then
+  args+=(--display-scale "$display_scale")
+fi
+if [ -n "$cursor_scale" ]; then
+  args+=(--cursor-scale "$cursor_scale")
+fi
+
+exec augustus "${args[@]}" "$data"
+#+end_src
+
+** Augustus mouse fix: nix/desktop/games/augustus-mouse.patch
+
+With the display scale above 100%, the game reacted to clicks in the wrong
+place: buttons lit up when the pointer was well to the left of them. The
+cause is sdl2-compat, the SDL2 that nixpkgs provides (SDL2 imitated on top of
+SDL3). Augustus expects SDL to convert mouse positions to its scaled game
+pixels, as the original SDL2 did; sdl2-compat passes on the position on the
+screen instead (Augustus issue #1226). The original SDL2 is no longer in
+nixpkgs, so this patch makes Augustus do the conversion itself: it asks SDL
+where the pointer is in the window and divides by the scale, as Augustus
+already does in one other place (relative mouse mode, in =mouse.c=).
+
+Nix builds Augustus from source with this patch, so the first rebuild after
+a change here takes a few minutes. Remove the patch (and the =overrideAttrs=
+in "Games") once Augustus or sdl2-compat fixes the problem; with a fixed
+sdl2-compat the patch would still work, as it ignores the positions in SDL's
+mouse events altogether.
+
+#+begin_src diff :tangle nix/desktop/games/augustus-mouse.patch
+GENERATED from config.org ("Games / Augustus mouse fix"). Do not edit; edit config.org.
+diff --git a/src/platform/augustus.c b/src/platform/augustus.c
+--- a/src/platform/augustus.c
++++ b/src/platform/augustus.c
+@@ -1,5 +1,6 @@
+ #include "SDL.h"
+ 
++#include "core/calc.h"
+ #include "core/config.h"
+ #include "core/encoding.h"
+ #include "core/file.h"
+@@ -194,10 +195,22 @@ static void run_and_draw(void)
+     platform_renderer_render();
+ }
+ 
++// sdl2-compat does not reliably convert the coordinates in mouse events to the
++// game's scaled pixels (Augustus issue #1226). Ignore them: read the pointer's
++// window position and scale it here, as mouse.c already does for relative mode.
++static void set_mouse_position_from_window(void)
++{
++    int x, y;
++    SDL_GetMouseState(&x, &y);
++    int scale_percentage = calc_percentage(100, platform_screen_get_scale());
++    mouse_set_position(calc_adjust_with_percentage(x, scale_percentage),
++                       calc_adjust_with_percentage(y, scale_percentage));
++}
++
+ static void handle_mouse_button(SDL_MouseButtonEvent *event, int is_down)
+ {
+     if (!SDL_GetRelativeMouseMode()) {
+-        mouse_set_position(event->x, event->y);
++        set_mouse_position_from_window();
+     }
+     if (event->button == SDL_BUTTON_LEFT) {
+         mouse_set_left_down(is_down);
+@@ -303,7 +316,7 @@ static void handle_event(SDL_Event *event)
+             break;
+         case SDL_MOUSEMOTION:
+             if (event->motion.which != SDL_TOUCH_MOUSEID && !SDL_GetRelativeMouseMode()) {
+-                mouse_set_position(event->motion.x, event->motion.y);
++                set_mouse_position_from_window();
+             }
+             break;
+         case SDL_MOUSEBUTTONDOWN:
 #+end_src
 
 ** Civilization IV with BUG: nix/desktop/games/civ4.sh
@@ -3672,17 +3781,73 @@ game crashes at certain moments without it, e.g. when building Stonehenge)
 and =d3dx9= (tile yields display correctly), and the =C= locale (the game
 misreads numbers in some languages). The first start does all of this, with
 =winetricks isolate_home= first, so the prefix's "Documents" is a folder of its
-own instead of a link to yours. Then GOG's installer runs silently.
+own instead of a link to yours. Then GOG's installer runs silently: no
+window, and for several minutes no output.
 
-*BUG* goes into =My Games\Beyond the Sword= inside the prefix (its
-=CustomAssets= folder, so it is active in every game). The launcher only
-installs it when that folder is missing, so your own copy wins: if you move
+Not =winetricks sandbox=: besides isolating "Documents", it removes Wine's
+=Z:= drive, through which Windows programs reach your Linux folders. Wine can
+then no longer read the installer in =~/Games/installers=, and crashes.
+
+When Wine creates the prefix, it offers to install Wine Mono (its stand-in
+for .NET) and Wine Gecko (for Internet Explorer's engine). Civilization IV
+needs neither, so the launcher switches both off for that step
+(=WINEDLLOVERRIDES=) and the questions don't appear. Should Wine ask again
+after an update of Wine itself, Cancel is the right answer.
+
+Wine's error messages are shown in the terminal (=WINEDEBUG=fixme-all= hides
+only its notes about unimplemented functions), so when the game doesn't
+start, running =civ4= in a terminal says why.
+
+*BUG* is installed the way its readme describes for an installation that is
+active in every game. Its zip is laid out as a mod folder (=Assets=, =Info=,
+=UserSettings=, =PrivateMaps=). Inside the prefix's =My Games\Beyond the
+Sword=, the contents of =Assets= go into =CustomAssets=, and =Info= and
+=UserSettings= into a folder =BUG Mod= next to it; the extra map scripts in
+=PrivateMaps= go into the game's own =PublicMaps= (in
+=Civ4\Beyond the Sword=: GOG's installer adds that =Civ4= level, so the
+launcher looks up where =Civ4BeyondSword.exe= is). The launcher only installs
+BUG when that =BUG Mod= folder is missing, so your own copy wins: if you move
 your Windows =Documents\My Games\Beyond the Sword= folder into the prefix
 (saved games, BUG and its settings), nothing is overwritten. Press
 =Alt+Ctrl+O= in the game for BUG's options.
 
 The first start needs the internet (for msxml3 and d3dx9) and takes a few
 minutes.
+
+*Resolution.* The game has to run at the screen's own resolution
+(2560 × 1600 on the laptop). Old games normally switch the screen to a lower
+resolution for fullscreen, but under niri the screen can't be switched. At a
+lower resolution the game then fills only part of the screen (a quarter at
+1280 × 800) and the mouse is off. Its default, "desktop resolution" (0 × 0),
+gave the same quarter picture. Two alternatives were tried and rejected:
+Wine's Wayland mode in a window at 1280 × 800, scaled up by Wine (a working
+mouse, but blurry, with a Windows title bar), and gamescope (no scaling
+inside niri, unreliable mouse). At full resolution the picture is sharp and
+the mouse works; the text is smaller than on a 1080p screen.
+
+The resolution lives in =live/civ4/civ4.conf=, linked to
+=~/.config/civ4/civ4.conf=. At every start the launcher writes those values
+into the game's own settings file (=CivilizationIV.ini= in the prefix's
+=My Games\Beyond the Sword=), so a change is: edit, save, start the game; no
+rebuild. That settings file only exists after the game's first start; on that
+very first start the game uses its default.
+
+Wine's DPI is set to the standard 96 when the prefix is created
+(=LogPixels=). That was part of the setup that worked; whether the game needs
+it was not tested separately.
+
+#+begin_src sh :tangle live/civ4/civ4.conf
+# GENERATED from config.org ("Games / Civilization IV with BUG"). Do not edit; edit config.org.
+# civ4.conf: read by the civ4 launcher at every start; no rebuild needed. The
+# launcher writes these into the game's CivilizationIV.ini before starting it.
+# screen_width, screen_height: the game's resolution. Under niri the game only
+#   fills the screen at the screen's own resolution.
+# fullscreen: 1 = fullscreen, 0 = in a window.
+# Empty: leave the game's own setting alone.
+screen_width=2560
+screen_height=1600
+fullscreen=1
+#+end_src
 
 #+begin_src sh :tangle nix/desktop/games/civ4.sh
 # GENERATED from config.org ("Games / Civilization IV with BUG"). Do not edit; edit config.org.
@@ -3691,45 +3856,97 @@ minutes.
 # runs GOG's installer; BUG is installed whenever it is missing.
 export WINEPREFIX="${XDG_DATA_HOME:-$HOME/.local/share}/wine/civ4"
 export WINEARCH=win32
-export WINEDEBUG=-all
+export WINEDEBUG=fixme-all
 export LC_ALL=C
 game_windows='C:\GOG Games\Civilization IV Complete'
-game="$WINEPREFIX/drive_c/GOG Games/Civilization IV Complete"
 
 if [ ! -e "$WINEPREFIX/.installed" ]; then
   setup=$(find_one "$installer" "GOG's offline installer for Civilization IV (all its files)")
   check_sum "$setup" "$sha256"
   echo "Creating the Wine prefix, with msxml3 and d3dx9 (needs the internet) ..."
   mkdir -p "$(dirname "$WINEPREFIX")"
-  wineboot --init
+  # No Wine Mono (.NET) or Wine Gecko: the game needs neither, so don't ask.
+  WINEDLLOVERRIDES="mscoree,mshtml=" wineboot --init
   winetricks -q isolate_home msxml3 d3dx9
+  # Wine's standard DPI, as in the setup that worked (see "Resolution").
+  wine reg add 'HKCU\Control Panel\Desktop' /v LogPixels /t REG_DWORD /d 96 /f
   echo "Running GOG's installer ..."
   wine "$setup" /VERYSILENT /SUPPRESSMSGBOXES /NORESTART /DIR="$game_windows"
   wineserver --wait
   touch "$WINEPREFIX/.installed"
 fi
 
+# GOG's installer puts Beyond the Sword a folder deeper than you might expect
+# (...\Civilization IV Complete\Civ4\Beyond the Sword): look for the program
+# instead of assuming the layout.
+exe=$(find "$WINEPREFIX/drive_c/GOG Games" -iname 'Civ4BeyondSword.exe' -print -quit)
+if [ -z "$exe" ]; then
+  echo "Civ4BeyondSword.exe not found in the Wine folder's GOG Games." >&2
+  echo "To reinstall: delete $WINEPREFIX and start civ4 again." >&2
+  exit 1
+fi
+bts=$(dirname "$exe")
+
 my_games="$WINEPREFIX/drive_c/users/$USER/Documents/My Games/Beyond the Sword"
-if [ ! -d "$my_games/CustomAssets" ]; then
+if [ ! -d "$my_games/BUG Mod" ]; then
   zip=$(find_one "$bug" "the BUG mod's zip from civ4bug.sourceforge.net")
   check_sum "$zip" "$bug_sha256"
   tmp=$(mktemp -d)
   unzip -q "$zip" -d "$tmp"
-  # The zip may hold CustomAssets at the top or inside a folder of its own:
-  # what goes into "Beyond the Sword" is the folder that contains it.
-  assets=$(find "$tmp" -type d -iname 'CustomAssets' -print -quit)
+  # The zip is a mod folder (Assets, Info, UserSettings, PrivateMaps), at its
+  # top or inside a folder of its own: find the folder that holds Assets.
+  assets=$(find "$tmp" -maxdepth 2 -type d -name 'Assets' -print -quit)
   if [ -z "$assets" ]; then
     rm -rf "$tmp"
-    echo "No CustomAssets folder found in $(basename "$zip"); is it the BUG mod?" >&2
+    echo "No Assets folder found in $(basename "$zip"); is it the BUG mod?" >&2
     exit 1
   fi
-  mkdir -p "$my_games"
-  cp -R --no-preserve=mode "$(dirname "$assets")"/. "$my_games"/
+  root=$(dirname "$assets")
+  # As BUG's readme describes: Assets into CustomAssets, Info and
+  # UserSettings into "BUG Mod", the map scripts into the game's PublicMaps.
+  mkdir -p "$my_games/CustomAssets" "$my_games/BUG Mod"
+  cp -R --no-preserve=mode "$assets"/. "$my_games/CustomAssets"/
+  for folder in Info UserSettings; do
+    if [ -d "$root/$folder" ]; then
+      cp -R --no-preserve=mode "$root/$folder" "$my_games/BUG Mod"/
+    fi
+  done
+  if [ -d "$root/PrivateMaps" ] && [ -d "$bts/PublicMaps" ]; then
+    cp -R --no-preserve=mode "$root/PrivateMaps"/. "$bts/PublicMaps"/
+  fi
   rm -rf "$tmp"
-  echo "BUG installed in My Games/Beyond the Sword."
+  echo "BUG installed in My Games/Beyond the Sword (CustomAssets and BUG Mod)."
 fi
 
-cd "$game/Beyond the Sword"
+# Resolution and fullscreen from live/civ4/civ4.conf, written into the game's
+# own settings file at every start.
+screen_width=""
+screen_height=""
+fullscreen=""
+conf="${XDG_CONFIG_HOME:-$HOME/.config}/civ4/civ4.conf"
+if [ -f "$conf" ]; then
+  # shellcheck source=/dev/null
+  . "$conf"
+fi
+ini="$my_games/CivilizationIV.ini"
+if [ -f "$ini" ]; then
+  # Only the number after "Key =" changes; the rest of each line (including
+  # the Windows line ending) stays as it is.
+  if [ -n "$screen_width" ]; then
+    sed -i -E "s/^(ScreenWidth *= *)[0-9]+/\1$screen_width/" "$ini"
+  fi
+  if [ -n "$screen_height" ]; then
+    sed -i -E "s/^(ScreenHeight *= *)[0-9]+/\1$screen_height/" "$ini"
+  fi
+  if [ -n "$fullscreen" ]; then
+    sed -i -E "s/^(FullScreen *= *)[0-9]+/\1$fullscreen/" "$ini"
+  fi
+else
+  echo "First start: the game creates its settings file now. The resolution"
+  echo "from ~/.config/civ4/civ4.conf applies from the next start on."
+fi
+
+cd "$bts"
 exec wine Civ4BeyondSword.exe "$@"
 #+end_src
 

@@ -22,4 +22,20 @@ if [ ! -e "$data/.installed" ]; then
   touch "$data/.installed"
 fi
 
-exec augustus "$data"
+# Scale and pointer size from live/caesar3/caesar3.conf, read at every start.
+display_scale=""
+cursor_scale=""
+conf="${XDG_CONFIG_HOME:-$HOME/.config}/caesar3/caesar3.conf"
+if [ -f "$conf" ]; then
+  # shellcheck source=/dev/null
+  . "$conf"
+fi
+args=()
+if [ -n "$display_scale" ]; then
+  args+=(--display-scale "$display_scale")
+fi
+if [ -n "$cursor_scale" ]; then
+  args+=(--cursor-scale "$cursor_scale")
+fi
+
+exec augustus "${args[@]}" "$data"
