@@ -50,7 +50,7 @@ let
     sha256 = cfg.civ4.sha256;
     bug = cfg.civ4.bug;
     bug_sha256 = cfg.civ4.bugSha256;
-  } (with pkgs; [ winePackages.stable winetricks coreutils findutils unzip cabextract gnused ]);
+  } (with pkgs; [ winePackages.stable winetricks coreutils findutils unzip cabextract gnused gawk ]);
 in
 {
   options.games = {

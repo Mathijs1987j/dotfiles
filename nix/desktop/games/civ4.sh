@@ -71,6 +71,7 @@ fi
 screen_width=""
 screen_height=""
 fullscreen=""
+font_scale=""
 conf="${XDG_CONFIG_HOME:-$HOME/.config}/civ4/civ4.conf"
 if [ -f "$conf" ]; then
   # shellcheck source=/dev/null
@@ -92,6 +93,36 @@ if [ -f "$ini" ]; then
 else
   echo "First start: the game creates its settings file now. The resolution"
   echo "from ~/.config/civ4/civ4.conf applies from the next start on."
+fi
+
+# Text size: the sizes in the game's theme file times font_scale, always
+# computed from an untouched copy of that file (kept next to it as .orig).
+thm="$bts/Resource/Themes/Civ4/Civ4Theme_Common.thm"
+if [ -f "$thm" ]; then
+  if [ ! -f "$thm.orig" ]; then
+    cp "$thm" "$thm.orig"
+  fi
+  if [ -n "$font_scale" ]; then
+    # Lines like: GFont .Size1_Normal = GFont("Sylfaen", "Regular", 15, ...);
+    # the number after the font and the style is the size.
+    awk -v f="$font_scale" '
+      /^[ \t]*GFont[ \t]+\.Size[0-9]/ && match($0, /"[^"]*"[ \t]*,[ \t]*"[^"]*"[ \t]*,[ \t]*[0-9]+/) {
+        seg = substr($0, RSTART, RLENGTH)
+        size = seg
+        sub(/.*,[ \t]*/, "", size)
+        sub(/[0-9]+$/, int(size * f + 0.5), seg)
+        $0 = substr($0, 1, RSTART - 1) seg substr($0, RSTART + RLENGTH)
+        changed++
+      }
+      { print }
+      END { if (!changed) print "No font sizes found in the theme file; font_scale not applied." > "/dev/stderr" }
+    ' "$thm.orig" > "$thm.new"
+    mv "$thm.new" "$thm"
+  else
+    cp "$thm.orig" "$thm"
+  fi
+else
+  echo "Theme file not found, font_scale not applied: $thm" >&2
 fi
 
 cd "$bts"

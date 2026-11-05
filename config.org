@@ -3531,7 +3531,7 @@ let
     sha256 = cfg.civ4.sha256;
     bug = cfg.civ4.bug;
     bug_sha256 = cfg.civ4.bugSha256;
-  } (with pkgs; [ winePackages.stable winetricks coreutils findutils unzip cabextract gnused ]);
+  } (with pkgs; [ winePackages.stable winetricks coreutils findutils unzip cabextract gnused gawk ]);
 in
 {
   options.games = {
@@ -3832,6 +3832,21 @@ into the game's own settings file (=CivilizationIV.ini= in the prefix's
 rebuild. That settings file only exists after the game's first start; on that
 very first start the game uses its default.
 
+*Text size.* At full resolution the text is small. Civilization IV takes
+its font sizes from a theme file in the game folder,
+=Beyond the Sword\Resource\Themes\Civ4\Civ4Theme_Common.thm=: lines such as
+~GFont .Size1_Normal = GFont("Sylfaen", "Regular", 15, ...)~, sizes
+=Size0= to =Size4=. CivFanatics players enlarge text for high resolutions by
+raising those numbers; BUG doesn't touch that file, and as far as known it
+can't be replaced from =CustomAssets=. So the launcher does it: at every
+start it multiplies all those sizes by =font_scale= from =civ4.conf=, always
+starting from an untouched copy of the file that it keeps next to it
+(=.orig=). An empty =font_scale= puts the original back. Known limits, from
+players' experience: the main menu, popups and the diplomacy screen are
+drawn by the game itself and stay small; city names on the map are set
+elsewhere (=CITY_BILLBOARDS= in =CIV4ArtDefines_Misc.xml=); and with large
+factors some text overflows its box, e.g. in the Civilopedia.
+
 Wine's DPI is set to the standard 96 when the prefix is created
 (=LogPixels=). That was part of the setup that worked; whether the game needs
 it was not tested separately.
@@ -3843,10 +3858,13 @@ it was not tested separately.
 # screen_width, screen_height: the game's resolution. Under niri the game only
 #   fills the screen at the screen's own resolution.
 # fullscreen: 1 = fullscreen, 0 = in a window.
-# Empty: leave the game's own setting alone.
+# font_scale: factor for the interface's font sizes, e.g. 1.4; decimals are
+#   fine. Empty: the game's original sizes.
+# Empty (the other values): leave the game's own setting alone.
 screen_width=2560
 screen_height=1600
 fullscreen=1
+font_scale=1.4
 #+end_src
 
 #+begin_src sh :tangle nix/desktop/games/civ4.sh
@@ -3923,6 +3941,7 @@ fi
 screen_width=""
 screen_height=""
 fullscreen=""
+font_scale=""
 conf="${XDG_CONFIG_HOME:-$HOME/.config}/civ4/civ4.conf"
 if [ -f "$conf" ]; then
   # shellcheck source=/dev/null
@@ -3944,6 +3963,36 @@ if [ -f "$ini" ]; then
 else
   echo "First start: the game creates its settings file now. The resolution"
   echo "from ~/.config/civ4/civ4.conf applies from the next start on."
+fi
+
+# Text size: the sizes in the game's theme file times font_scale, always
+# computed from an untouched copy of that file (kept next to it as .orig).
+thm="$bts/Resource/Themes/Civ4/Civ4Theme_Common.thm"
+if [ -f "$thm" ]; then
+  if [ ! -f "$thm.orig" ]; then
+    cp "$thm" "$thm.orig"
+  fi
+  if [ -n "$font_scale" ]; then
+    # Lines like: GFont .Size1_Normal = GFont("Sylfaen", "Regular", 15, ...);
+    # the number after the font and the style is the size.
+    awk -v f="$font_scale" '
+      /^[ \t]*GFont[ \t]+\.Size[0-9]/ && match($0, /"[^"]*"[ \t]*,[ \t]*"[^"]*"[ \t]*,[ \t]*[0-9]+/) {
+        seg = substr($0, RSTART, RLENGTH)
+        size = seg
+        sub(/.*,[ \t]*/, "", size)
+        sub(/[0-9]+$/, int(size * f + 0.5), seg)
+        $0 = substr($0, 1, RSTART - 1) seg substr($0, RSTART + RLENGTH)
+        changed++
+      }
+      { print }
+      END { if (!changed) print "No font sizes found in the theme file; font_scale not applied." > "/dev/stderr" }
+    ' "$thm.orig" > "$thm.new"
+    mv "$thm.new" "$thm"
+  else
+    cp "$thm.orig" "$thm"
+  fi
+else
+  echo "Theme file not found, font_scale not applied: $thm" >&2
 fi
 
 cd "$bts"
