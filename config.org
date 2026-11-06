@@ -1,6 +1,6 @@
 #+TITLE: Configuration: NixOS, Emacs and LaTeX
 #+AUTHOR: MJ
-#+DATE: 2026-11-05
+#+DATE: 2026-11-06
 #+STARTUP: overview
 #+PROPERTY: header-args :mkdirp yes :noweb yes :eval no
 #+PROPERTY: header-args:emacs-lisp :tangle live/emacs/config.el :eval yes
@@ -5519,7 +5519,7 @@ can still log in at the server's own keyboard.
 * State: what is not in this file
 
 Everything above can be rebuilt from this file. What follows cannot: it is
-made by using the programs, and it belongs in backups, not in the
+ma+de by using the programs, and it belongs in backups, not in the
 repository. When moving to a new machine, these are the things to carry
 over by hand.
 
