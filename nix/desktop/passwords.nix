@@ -23,4 +23,25 @@
 
   # KeePassXC rewrites its settings: a starting copy, then its own.
   dotfiles.seeds.".config/keepassxc/keepassxc.ini" = "live/keepassxc/keepassxc.ini";
+
+  # Started with the session, once the tray is there (see the prose).
+  systemd.user.services.keepassxc = {
+    description = "KeePassXC password manager";
+    wantedBy = [ "graphical-session.target" ];
+    partOf = [ "graphical-session.target" ];
+    after = [ "graphical-session.target" "waybar.service" ];
+    serviceConfig = {
+      # Wait (at most 10 s) until Waybar's tray is on the session bus.
+      ExecStartPre = pkgs.writeShellScript "wait-for-tray" ''
+        for _ in $(seq 50); do
+          ${pkgs.systemd}/bin/busctl --user status org.kde.StatusNotifierWatcher \
+            >/dev/null 2>&1 && exit 0
+          sleep 0.2
+        done
+        exit 0 # start anyway, rather than not at all
+      '';
+      ExecStart = "${pkgs.keepassxc}/bin/keepassxc";
+      Restart = "on-failure";
+    };
+  };
 }

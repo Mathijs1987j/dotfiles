@@ -2587,9 +2587,18 @@ integration; puts KeePassXC in the tray, where closing the window also sends
 it (the browser can only reach KeePassXC while it runs); starts it
 minimised; locks the vault after 15 minutes without use, and when the
 session locks or the laptop goes to sleep; and clears a copied password
-from the clipboard after 10 seconds. niri starts it at login. To change a
-setting for good, change it here /and/ in the settings window (or delete
+from the clipboard after 10 seconds. To change a setting for good, change
+it here /and/ in the settings window (or delete
 =~/.config/keepassxc/keepassxc.ini= and log in again).
+
+*Starting with the session.* KeePassXC looks for a tray only once, when it
+starts; if the bar is not there yet, it runs without an icon and, started
+minimised, without any window either. Started by niri it lost that race
+(Waybar starts at the same moment, as a systemd service), so it is a
+systemd user service too, like the polkit agent: it waits until the bar's
+tray answers on the session bus (at most ten seconds), then starts. If you
+quit it from its menu, start it again from fuzzel or with
+=systemctl --user start keepassxc=.
 
 *The first time.*
 
@@ -2638,6 +2647,27 @@ setting for good, change it here /and/ in the settings window (or delete
 
   # KeePassXC rewrites its settings: a starting copy, then its own.
   dotfiles.seeds.".config/keepassxc/keepassxc.ini" = "live/keepassxc/keepassxc.ini";
+
+  # Started with the session, once the tray is there (see the prose).
+  systemd.user.services.keepassxc = {
+    description = "KeePassXC password manager";
+    wantedBy = [ "graphical-session.target" ];
+    partOf = [ "graphical-session.target" ];
+    after = [ "graphical-session.target" "waybar.service" ];
+    serviceConfig = {
+      # Wait (at most 10 s) until Waybar's tray is on the session bus.
+      ExecStartPre = pkgs.writeShellScript "wait-for-tray" ''
+        for _ in $(seq 50); do
+          ${pkgs.systemd}/bin/busctl --user status org.kde.StatusNotifierWatcher \
+            >/dev/null 2>&1 && exit 0
+          sleep 0.2
+        done
+        exit 0 # start anyway, rather than not at all
+      '';
+      ExecStart = "${pkgs.keepassxc}/bin/keepassxc";
+      Restart = "on-failure";
+    };
+  };
 }
 #+end_src
 
@@ -2671,11 +2701,6 @@ LockDatabaseIdleSeconds=900
 LockDatabaseScreenLock=true
 ClearClipboard=true
 ClearClipboardTimeout=10
-#+end_src
-
-#+begin_src kdl
-// Passwords (config.org: Internet / Passwords)
-spawn-at-startup "keepassxc"
 #+end_src
 
 ** WhatsApp Web: nix/desktop/whatsapp.nix
