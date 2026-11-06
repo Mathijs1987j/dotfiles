@@ -2,8 +2,21 @@
 # nix/desktop/browser.nix: LibreWolf, Firefox as fallback, default programs.
 { pkgs, username, ... }:
 
+let
+  # An extension from addons.mozilla.org, always the latest version.
+  amo = slug: {
+    installation_mode = "force_installed";
+    install_url = "https://addons.mozilla.org/firefox/downloads/latest/${slug}/latest.xpi";
+  };
+
+  librewolf = pkgs.librewolf.override {
+    extraPolicies.ExtensionSettings = {
+      "keepassxc-browser@keepassxc.org" = amo "keepassxc-browser"; # see Passwords
+    };
+  };
+in
 {
-  users.users.${username}.packages = [ pkgs.librewolf ];
+  users.users.${username}.packages = [ librewolf ];
   programs.firefox.enable = true; # the fallback browser, system-wide
 
   # Which programs open links and files (your own choices, made in a

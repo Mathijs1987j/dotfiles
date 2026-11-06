@@ -253,3 +253,6 @@ cursor {
     xcursor-theme "Adwaita"
     xcursor-size 24
 }
+
+// Passwords (config.org: Internet / Passwords)
+spawn-at-startup "keepassxc"

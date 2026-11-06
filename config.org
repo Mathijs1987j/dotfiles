@@ -79,8 +79,8 @@ Nix, KDL or shell block is a fragment of a file, not a program.
 - =flake.lock=: written by Nix; pins every input. Committed; updated by the
   weekly job (see [[*Weekly updates: nix/core/updates.nix][Weekly updates]]).
 - =README.md= and =.gitattributes=: short, edited directly.
-- Secrets: passwords, tokens and keys live in the keyring and in program
-  folders, never here.
+- Secrets: passwords, tokens and keys live in the keyring, in the
+  KeePassXC vault and in program folders, never here.
 - State: browser profiles, mail, saved games, the torrent list. The last
   chapter, [[*State: what is not in this file][State]], lists where each lives.
 
@@ -2421,14 +2421,48 @@ bright7=<<text>>
 :header-args:nix: :tangle nix/desktop/browser.nix
 :END:
 
-LibreWolf is Firefox with privacy-first defaults and without telemetry. Three
-of those defaults get in the way of daily life, and the overrides file
-softens exactly those: logins are kept when the browser closes (history is
-still cleared), /resistFingerprinting/ is off (it forces a light theme and
-the UTC time zone; Firefox's milder fingerprinting protection is on
-instead), and WebGL is on (maps, GeoGebra 3D, some reveal.js effects).
-LibreWolf reads =librewolf.overrides.cfg= at every start; the values are
-defaults, so a change in the settings window lasts until the next start.
+LibreWolf is Firefox with privacy-first defaults and without telemetry. A
+few of those defaults get in the way of daily life, and the overrides file
+softens exactly those: cookies are kept when the browser closes, so you
+stay signed in to websites; /resistFingerprinting/ is off (it forces a light
+theme and the UTC time zone; Firefox's milder fingerprinting protection is
+on instead); and WebGL is on (maps, GeoGebra 3D, some reveal.js effects).
+
+*What the browser keeps.* Everything lives in the profile folder (see
+[[*State: what is not in this file][State]]): history and bookmarks (=places.sqlite=, where the address bar's
+suggestions come from), form history (=formhistory.sqlite=), cookies and
+site data (=cookies.sqlite=, =storage/=), the open tabs
+(=sessionstore.jsonlz4=), choices made in the settings window (=prefs.js=)
+and the extensions. Only the cache (=~/.cache/librewolf=) is temporary.
+History and form history are kept when the browser closes. LibreWolf
+stopped clearing history by default some versions ago, but its settings
+page can still show /Clear history when LibreWolf closes/ ticked; the
+overrides file states the real choice outright. Form history means that a
+field suggests what you typed into fields like it before, also on a site
+you have never visited: your e-mail address in a sign-up form. It stays on
+this laptop and a site only receives the entry you pick, but it is not
+encrypted, and on the projector the list is visible to the whole class.
+Shift+Delete removes the highlighted suggestion. LibreWolf's own password
+manager stays off: logins are KeePassXC's job (see [[*Passwords: nix/desktop/passwords.nix][Passwords]]).
+
+LibreWolf reads =librewolf.overrides.cfg= at every start, and =pref()= sets
+each value anew each time: a change in the settings window lasts until the
+next start, and this file stays the authority. (=defaultPref()=, used until
+November 2026, only sets a default: a change in the settings window would
+then win for good.)
+
+*Extensions.* Which extensions LibreWolf has is declared here, as
+/enterprise policies/: rules a browser reads at start and follows. LibreWolf
+brings its own policies file (it installs uBlock Origin); nixpkgs' wrapper
+merges the policies below into it. Each extension is named by its id and
+fetched from addons.mozilla.org the first time; after that it updates
+itself, like any extension, so the version is state and the choice is
+configuration. /force_installed/ means it cannot be removed in the browser:
+to drop one, delete its entry here. An extension's own settings (uBlock's
+filter lists, KeePassXC-Browser's connection) stay state, in the profile.
+The policies apply to every LibreWolf profile, the WhatsApp one included.
+To add an extension: find its id at =about:support= (section /Add-ons/)
+after installing it by hand once, then copy an entry below.
 
 Firefox stays installed as the fallback for the rare site that misbehaves.
 NixOS also sets which programs open links and files.
@@ -2438,8 +2472,21 @@ NixOS also sets which programs open links and files.
 # nix/desktop/browser.nix: LibreWolf, Firefox as fallback, default programs.
 { pkgs, username, ... }:
 
+let
+  # An extension from addons.mozilla.org, always the latest version.
+  amo = slug: {
+    installation_mode = "force_installed";
+    install_url = "https://addons.mozilla.org/firefox/downloads/latest/${slug}/latest.xpi";
+  };
+
+  librewolf = pkgs.librewolf.override {
+    extraPolicies.ExtensionSettings = {
+      "keepassxc-browser@keepassxc.org" = amo "keepassxc-browser"; # see Passwords
+    };
+  };
+in
 {
-  users.users.${username}.packages = [ pkgs.librewolf ];
+  users.users.${username}.packages = [ librewolf ];
   programs.firefox.enable = true; # the fallback browser, system-wide
 
   # Which programs open links and files (your own choices, made in a
@@ -2467,18 +2514,168 @@ NixOS also sets which programs open links and files.
 
 #+begin_src js :tangle live/librewolf/librewolf.overrides.cfg
 // GENERATED from config.org ("Internet / LibreWolf"). Do not edit; edit config.org.
-// Keep cookies and logins when the browser closes (history is still cleared):
+// pref(): set at every start; the settings window can change a value until
+// the next start.
+// Keep cookies and site data when the browser closes:
 // Outlook on the web, GitHub, school portals stay signed in.
-defaultPref("privacy.clearOnShutdown_v2.cookiesAndStorage", false);
-defaultPref("privacy.clearOnShutdown.cookies", false);
+pref("privacy.clearOnShutdown_v2.cookiesAndStorage", false);
+pref("privacy.clearOnShutdown.cookies", false);
+// Keep history (the address bar's suggestions) and form history.
+pref("privacy.clearOnShutdown_v2.browsingHistoryAndDownloads", false);
+pref("privacy.clearOnShutdown_v2.formdata", false);
+// Fields suggest what was typed into them before (e-mail on a new site).
+pref("browser.formfill.enable", true);
+// No built-in password manager: KeePassXC-Browser fills and saves logins.
+pref("signon.rememberSignons", false);
 // resistFingerprinting forces a light theme and the UTC time zone, and makes
 // some sites misbehave; Firefox's milder protection stays on instead.
-defaultPref("privacy.resistFingerprinting", false);
-defaultPref("privacy.fingerprintingProtection", true);
+pref("privacy.resistFingerprinting", false);
+pref("privacy.fingerprintingProtection", true);
 // WebGL: maps, GeoGebra 3D, some reveal.js decks.
-defaultPref("webgl.disabled", false);
+pref("webgl.disabled", false);
 // Firefox Sync is off by default in LibreWolf; uncomment to use it.
-// defaultPref("identity.fxaccounts.enabled", true);
+// pref("identity.fxaccounts.enabled", true);
+#+end_src
+
+** Passwords: nix/desktop/passwords.nix
+:PROPERTIES:
+:header-args:nix: :tangle nix/desktop/passwords.nix
+:END:
+
+KeePassXC keeps every login in one encrypted file, the /vault/
+(=~/Documents/Passwords.kdbx=). The vault is state, like a document: it is
+backed up and carried to a new machine, never put in this repository (see
+[[*State: what is not in this file][State]]). The browser extension KeePassXC-Browser connects LibreWolf to it:
+it fills in saved logins, offers to save a new one after you sign up
+somewhere, and generates strong passwords (the icon in a password field, or
+right-click > KeePassXC-Browser > Generate password). The generator remembers
+its last settings, in the browser and in KeePassXC's own window (the dice
+icon); the Passphrase tab makes passwords of words, good for the few you
+have to type.
+
+*Keyring and vault.* Two places hold secrets, for two kinds of user. The
+/keyring/ (gnome-keyring, see [[*niri: nix/desktop/niri.nix][niri]]) is for programs: gh's token, the mail
+tokens, SSH keys. Programs store and fetch their secrets through a standard
+interface, the Secret Service, and the keyring opens when you log in;
+Seahorse shows what is in it. The /vault/ is for you: the logins you type,
+which you look up, generate and organise yourself. KeePassXC can also play
+the keyring's part; that is left off, so each keeps to its own role.
+
+*How the browser finds KeePassXC.* The extension cannot talk to a program
+directly. It starts a small helper, =keepassxc-proxy=, that a /native
+messaging manifest/ names: a JSON file the browser looks for in fixed
+folders. The two ready-made routes fail here. KeePassXC's settings window
+writes a manifest with the helper's path in the Nix store, which changes at
+every update; nixpkgs' browser wrapper links manifests into =~/.mozilla=,
+which LibreWolf no longer reads. So the manifest is in this file, and points
+to =/run/current-system/sw/bin/keepassxc-proxy=, a path that always leads to
+the current version. That is why KeePassXC is installed system-wide rather
+than for your account. LibreWolf's folders have moved between versions, so
+the manifest is linked into each place a version looks, like the overrides
+file above. (JSON has no comments, so this one file has no GENERATED line.)
+Firefox, the fallback, gets KeePassXC's own manifest through its NixOS
+module.
+
+In KeePassXC's settings (Tools > Settings > Browser Integration), /Enable
+browser integration/ is on, and no browser below it is ticked: a ticked
+browser gets a second manifest, with a store path.
+
+*Settings.* KeePassXC rewrites its settings file when you change something
+in its settings window, so the file below is a /seed/ (see [[*Links, seeds and folders: nix/core/links.nix][Links, seeds and
+folders]]): copied once, then KeePassXC's own. It switches on browser
+integration; puts KeePassXC in the tray, where closing the window also sends
+it (the browser can only reach KeePassXC while it runs); starts it
+minimised; locks the vault after 15 minutes without use, and when the
+session locks or the laptop goes to sleep; and clears a copied password
+from the clipboard after 10 seconds. niri starts it at login. To change a
+setting for good, change it here /and/ in the settings window (or delete
+=~/.config/keepassxc/keepassxc.ini= and log in again).
+
+*The first time.*
+
+1. Click KeePassXC's tray icon, then Database > New Database, and save it
+   as =~/Documents/Passwords.kdbx=. Its master password is the one password
+   left to remember: a passphrase of five or six words (the generator's
+   Passphrase tab makes one). Write it down and keep the paper somewhere
+   safe; without it the vault cannot be opened, by anyone.
+2. Import the old passwords: Database > Import, then the CSV file exported
+   from Chrome or Google, and match the columns (Title, URL, Username,
+   Password, Notes). Import the largest export first. For each further one
+   (HP, Edge): if the import window offers the open vault as destination,
+   use that; otherwise import it into a temporary vault and use Database >
+   Merge From Database in the real one. Then delete every CSV, on both
+   machines: =shred -u passwords.csv= overwrites the file before removing
+   it.
+3. In LibreWolf, KeePassXC-Browser is already installed (see [[*LibreWolf: nix/desktop/browser.nix][LibreWolf]],
+   /Extensions/). Click its icon, then Connect, and name the connection
+   (=librewolf=) in the window KeePassXC opens.
+4. Duplicates from several exports: Database > Reports > Health Check lists
+   reused passwords; the entries themselves are tidied by hand.
+
+#+begin_src nix
+# GENERATED from config.org ("Internet / Passwords"). Do not edit; edit config.org.
+# nix/desktop/passwords.nix: KeePassXC, its link to the browsers, its settings.
+{ pkgs, ... }:
+
+{
+  # System-wide, so /run/current-system/sw/bin/keepassxc-proxy always exists
+  # and the browser manifest below never points at an old version.
+  environment.systemPackages = [ pkgs.keepassxc ];
+
+  # Firefox (the fallback) gets KeePassXC's own manifest through its module.
+  programs.firefox.nativeMessagingHosts.packages = [ pkgs.keepassxc ];
+
+  # LibreWolf: the manifest from this file, in the old folder and in both
+  # candidates of the new (XDG) layout.
+  dotfiles.links = {
+    ".librewolf/native-messaging-hosts/org.keepassxc.keepassxc_browser.json" =
+      "live/keepassxc/org.keepassxc.keepassxc_browser.json";
+    ".config/librewolf/native-messaging-hosts/org.keepassxc.keepassxc_browser.json" =
+      "live/keepassxc/org.keepassxc.keepassxc_browser.json";
+    ".config/librewolf/librewolf/native-messaging-hosts/org.keepassxc.keepassxc_browser.json" =
+      "live/keepassxc/org.keepassxc.keepassxc_browser.json";
+  };
+
+  # KeePassXC rewrites its settings: a starting copy, then its own.
+  dotfiles.seeds.".config/keepassxc/keepassxc.ini" = "live/keepassxc/keepassxc.ini";
+}
+#+end_src
+
+#+begin_src json :tangle live/keepassxc/org.keepassxc.keepassxc_browser.json
+{
+  "name": "org.keepassxc.keepassxc_browser",
+  "description": "KeePassXC integration with native messaging support",
+  "path": "/run/current-system/sw/bin/keepassxc-proxy",
+  "type": "stdio",
+  "allowed_extensions": ["keepassxc-browser@keepassxc.org"]
+}
+#+end_src
+
+#+begin_src conf :tangle live/keepassxc/keepassxc.ini
+; GENERATED from config.org ("Internet / Passwords"). Do not edit; edit config.org.
+; A seed: copied to ~/.config/keepassxc/keepassxc.ini once, then KeePassXC's.
+[Browser]
+Enabled=true
+; Never write manifests: the one in the repository points to a stable path.
+UpdateBinaryPath=false
+
+[GUI]
+ShowTrayIcon=true
+MinimizeToTray=true
+MinimizeOnClose=true
+MinimizeOnStartup=true
+
+[Security]
+LockDatabaseIdle=true
+LockDatabaseIdleSeconds=900
+LockDatabaseScreenLock=true
+ClearClipboard=true
+ClearClipboardTimeout=10
+#+end_src
+
+#+begin_src kdl
+// Passwords (config.org: Internet / Passwords)
+spawn-at-startup "keepassxc"
 #+end_src
 
 ** WhatsApp Web: nix/desktop/whatsapp.nix
@@ -5529,7 +5726,8 @@ over by hand.
 | SSH keys                   | =~/.ssh=                                                     | copy; =chmod 600 ~/.ssh/id_*=                     |
 | GitHub login               | gh's keyring entry                                           | =gh auth login= again                             |
 | Passwords in the keyring   | =~/.local/share/keyrings=                                    | log in again where needed                         |
-| LibreWolf profile          | =~/.librewolf=                                               | Firefox Sync, or copy the profile folder          |
+| Logins (KeePassXC vault)   | =~/Documents/Passwords.kdbx=                                 | copy; then Connect in KeePassXC-Browser           |
+| LibreWolf profile          | =~/.config/librewolf= (older: =~/.librewolf=)                | Firefox Sync, or copy the profile folder          |
 | Signal                     | =~/.config/Signal=                                           | link the new machine from the phone               |
 | Mail (Thunderbird)         | =~/.thunderbird=                                             | add the account again (IMAP keeps the mail)       |
 | Mail (mu4e, if switched on)| =~/Mail=, =~/.local/share/oama=                              | =oama authorize=, then =mbsync -a= and =mu init=  |
@@ -5578,4 +5776,6 @@ configuration; copy it as well if you use them.
 The repository is on GitHub; =flake.lock= and the generated files are
 committed with it. Everything in the table above wants a backup of its
 own: the home folder (without =~/.cache=) to the WD drive or the cloud,
-and the server's =/var/lib/qBittorrent= alongside it.
+and the server's =/var/lib/qBittorrent= alongside it. The KeePassXC vault
+above all: keep a recent copy on the WD drive; it is encrypted, so a copy
+anywhere is safe as long as the master password is strong.
