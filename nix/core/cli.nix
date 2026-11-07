@@ -24,5 +24,8 @@
     nix-tree # browse what the system consists of, and why
     nix-du # graph of what takes space in the store
     graphviz # `dot`, to draw nix-du's graph
+    imagemagick   # magick: resize, convert, compress
+    libwebp       # cwebp: very good WebP encoder
+    oxipng        # lossless PNG optimiser (good for diagrams/screenshots)
   ];
 }

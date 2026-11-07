@@ -1,6 +1,6 @@
 #+TITLE: Configuration: NixOS, Emacs and LaTeX
 #+AUTHOR: MJ
-#+DATE: 2026-11-06
+#+DATE: 2026-11-07
 #+STARTUP: overview
 #+PROPERTY: header-args :mkdirp yes :noweb yes :eval no
 #+PROPERTY: header-args:emacs-lisp :tangle live/emacs/config.el :eval yes
@@ -1226,6 +1226,9 @@ it, also as root.
     nix-tree # browse what the system consists of, and why
     nix-du # graph of what takes space in the store
     graphviz # `dot`, to draw nix-du's graph
+    imagemagick   # magick: resize, convert, compress
+    libwebp       # cwebp: very good WebP encoder
+    oxipng        # lossless PNG optimiser (good for diagrams/screenshots)
   ];
 }
 #+end_src
