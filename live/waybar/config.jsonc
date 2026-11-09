@@ -31,7 +31,9 @@
   },
 
   // "rebuild" when the Nix files changed since the last rebuild (click to
-  // rebuild), and a note when a new NixOS release is out.
+  // rebuild), "rebuild boot" when they did while an update waits for the next
+  // boot (the click then rebuilds for the next boot), "reboot" when only that
+  // update waits, and a note when a new NixOS release is out.
   "custom/dotfiles": {
     "exec": "$HOME/.local/bin/dotfiles-status",
     "return-type": "json",

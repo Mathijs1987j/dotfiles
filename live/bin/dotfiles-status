@@ -1,15 +1,33 @@
 #!/usr/bin/env bash
 # GENERATED from config.org ("Foundations / Rebuild status"). Do not edit; edit config.org.
 # dotfiles-status: one line of JSON for Waybar: "rebuild" when the Nix files
-# differ from the running system, and a note when a new NixOS release is out.
+# differ from the last rebuild, "rebuild boot" when they do while a new system
+# waits for the next boot, "reboot" when only that new system waits, and a
+# note when a new NixOS release is out.
 state="${XDG_STATE_HOME:-$HOME/.local/state}/dotfiles"
 text=""
 tooltip=""
 class=""
+changed=false
 if [ "$("$HOME/.local/bin/dotfiles-fingerprint" 2>/dev/null)" != "$(cat "$state/built" 2>/dev/null)" ]; then
+  changed=true
+fi
+waiting=false
+if [ "$(readlink -f /nix/var/nix/profiles/system)" != "$(readlink -f /run/current-system)" ]; then
+  waiting=true
+fi
+if $changed && $waiting; then
+  text="rebuild boot"
+  tooltip="The Nix files changed, and a new system already waits for the next boot (the weekly update). Click to rebuild for the next boot, then reboot."
+  class="rebuild"
+elif $changed; then
   text="rebuild"
   tooltip="The Nix files changed since the last rebuild. Click to rebuild."
   class="rebuild"
+elif $waiting; then
+  text="reboot"
+  tooltip="A new system (the weekly update, or rebuild boot) starts at the next boot. Reboot to use it."
+  class="reboot"
 fi
 if [ -r /var/lib/dotfiles-update/new-release ]; then
   release=$(cat /var/lib/dotfiles-update/new-release)

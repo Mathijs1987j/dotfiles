@@ -10,7 +10,7 @@ shopt -s histappend autocd globstar checkwinsize
 
 # NixOS (rebuild is a command in ~/.local/bin; see config.org)
 alias rebuild-boot='rebuild boot' # use the new system from the next boot on
-alias update='rebuild switch --update' # update flake.lock, then switch
+alias update='rebuild boot --update' # update flake.lock, then use it from the next boot on
 alias gens='nh os info'           # list generations
 alias cfg='emacsclient -n ~/dotfiles/config.org'
 # Everyday

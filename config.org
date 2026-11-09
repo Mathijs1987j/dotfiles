@@ -45,7 +45,9 @@ colour, an alias, the LaTeX preamble or the Emacs configuration does not.
    - stages the generated files in git, so Nix can see new ones;
    - says /Nothing to rebuild/ or /Nix files changed: run rebuild/, and
      checks niri's settings.
-4. If asked: =rebuild=. The bar shows "rebuild" until you do.
+4. If asked: =rebuild=. The bar shows "rebuild" until you do, or "rebuild
+   boot" while the weekly update waits for the next boot; =rebuild= then
+   builds for the next boot by itself. "reboot" means a new system is ready.
 5. Commit this file together with the staged files (Magit: =C-x g=, =s= on
    =config.org=, =c c=), and push.
 
@@ -515,6 +517,15 @@ appears as you save, and disappears as the rebuild ends.
 =flake.lock= is deliberately not part of the fingerprint: the weekly update
 changes it and builds the result itself.
 
+The weekly update puts the new system in place *for the next boot*; until
+then the boot default differs from the running system, and both commands
+notice. The bar then shows "reboot", or "rebuild boot" when the Nix files
+changed too. And =rebuild= without a mode builds for the next boot instead
+of switching: switching a week of new versions into a running session can
+stop services and fail to start them again (this happened once: no network,
+no sound, no bar until a reboot). =rebuild switch= still switches when you
+ask for it.
+
 #+begin_src sh :tangle live/bin/dotfiles-fingerprint :tangle-mode o755
 #!/usr/bin/env bash
 # GENERATED from config.org ("Foundations / Rebuild status"). Do not edit; edit config.org.
@@ -532,8 +543,8 @@ cd "$HOME/dotfiles"
 =rebuild= takes nh's subcommands: =rebuild= (=switch=: build, activate, make
 it the boot default), =rebuild boot= (from the next boot on), =rebuild test=
 (activate, but not for the next boot), =rebuild build= (only build). Extra
-options pass through: =rebuild switch --update= (the alias =update=) first
-updates every input.
+options pass through: =rebuild boot --update= (the alias =update=) first
+updates every input, and uses the result from the next boot on.
 
 #+begin_src sh :tangle live/bin/rebuild :tangle-mode o755
 #!/usr/bin/env bash
@@ -541,16 +552,35 @@ updates every input.
 # rebuild [switch|boot|test|build] [nh options]: rebuild through nh, then
 # remember what was built (see dotfiles-fingerprint and dotfiles-status).
 set -euo pipefail
+state="${XDG_STATE_HOME:-$HOME/.local/state}/dotfiles"
+# A new system waits for the next boot (the weekly update, or an earlier
+# `rebuild boot`) when the boot default is not the running system.
+waiting=false
+if [ "$(readlink -f /nix/var/nix/profiles/system)" != "$(readlink -f /run/current-system)" ]; then
+  waiting=true
+fi
 mode=switch
 case "${1:-}" in
   switch | boot | test | build)
     mode=$1
     shift
     ;;
+  *)
+    # No mode given while a new system waits: never switch it in live.
+    if $waiting; then
+      if [ "$#" -eq 0 ] &&
+        [ "$("$HOME/.local/bin/dotfiles-fingerprint")" = "$(cat "$state/built" 2>/dev/null)" ]; then
+        echo "rebuild: nothing changed; the new system starts at the next boot. Reboot to use it."
+        exit 0
+      fi
+      echo "rebuild: a new system waits for the next boot, so this is 'rebuild boot'."
+      echo "         Reboot afterwards; 'rebuild switch' would switch now anyway."
+      mode=boot
+    fi
+    ;;
 esac
 nh os "$mode" "$@"
 if [ "$mode" != build ]; then
-  state="${XDG_STATE_HOME:-$HOME/.local/state}/dotfiles"
   mkdir -p "$state"
   "$HOME/.local/bin/dotfiles-fingerprint" > "$state/built"
   pkill -RTMIN+8 waybar || true # the bar checks again now
@@ -564,15 +594,33 @@ module (see [[*Bar: nix/desktop/waybar.nix][Bar]]). Empty text hides the module.
 #!/usr/bin/env bash
 # GENERATED from config.org ("Foundations / Rebuild status"). Do not edit; edit config.org.
 # dotfiles-status: one line of JSON for Waybar: "rebuild" when the Nix files
-# differ from the running system, and a note when a new NixOS release is out.
+# differ from the last rebuild, "rebuild boot" when they do while a new system
+# waits for the next boot, "reboot" when only that new system waits, and a
+# note when a new NixOS release is out.
 state="${XDG_STATE_HOME:-$HOME/.local/state}/dotfiles"
 text=""
 tooltip=""
 class=""
+changed=false
 if [ "$("$HOME/.local/bin/dotfiles-fingerprint" 2>/dev/null)" != "$(cat "$state/built" 2>/dev/null)" ]; then
+  changed=true
+fi
+waiting=false
+if [ "$(readlink -f /nix/var/nix/profiles/system)" != "$(readlink -f /run/current-system)" ]; then
+  waiting=true
+fi
+if $changed && $waiting; then
+  text="rebuild boot"
+  tooltip="The Nix files changed, and a new system already waits for the next boot (the weekly update). Click to rebuild for the next boot, then reboot."
+  class="rebuild"
+elif $changed; then
   text="rebuild"
   tooltip="The Nix files changed since the last rebuild. Click to rebuild."
   class="rebuild"
+elif $waiting; then
+  text="reboot"
+  tooltip="A new system (the weekly update, or rebuild boot) starts at the next boot. Reboot to use it."
+  class="reboot"
 fi
 if [ -r /var/lib/dotfiles-update/new-release ]; then
   release=$(cat /var/lib/dotfiles-update/new-release)
@@ -1167,7 +1215,7 @@ shopt -s histappend autocd globstar checkwinsize
 
 # NixOS (rebuild is a command in ~/.local/bin; see config.org)
 alias rebuild-boot='rebuild boot' # use the new system from the next boot on
-alias update='rebuild switch --update' # update flake.lock, then switch
+alias update='rebuild boot --update' # update flake.lock, then use it from the next boot on
 alias gens='nh os info'           # list generations
 alias cfg='emacsclient -n ~/dotfiles/config.org'
 # Everyday
@@ -1947,7 +1995,9 @@ shows a strange value, pick the processor's sensor (=thermal-zone= or
   },
 
   // "rebuild" when the Nix files changed since the last rebuild (click to
-  // rebuild), and a note when a new NixOS release is out.
+  // rebuild), "rebuild boot" when they did while an update waits for the next
+  // boot (the click then rebuilds for the next boot), "reboot" when only that
+  // update waits, and a note when a new NixOS release is out.
   "custom/dotfiles": {
     "exec": "$HOME/.local/bin/dotfiles-status",
     "return-type": "json",

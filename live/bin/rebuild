@@ -3,16 +3,35 @@
 # rebuild [switch|boot|test|build] [nh options]: rebuild through nh, then
 # remember what was built (see dotfiles-fingerprint and dotfiles-status).
 set -euo pipefail
+state="${XDG_STATE_HOME:-$HOME/.local/state}/dotfiles"
+# A new system waits for the next boot (the weekly update, or an earlier
+# `rebuild boot`) when the boot default is not the running system.
+waiting=false
+if [ "$(readlink -f /nix/var/nix/profiles/system)" != "$(readlink -f /run/current-system)" ]; then
+  waiting=true
+fi
 mode=switch
 case "${1:-}" in
   switch | boot | test | build)
     mode=$1
     shift
     ;;
+  *)
+    # No mode given while a new system waits: never switch it in live.
+    if $waiting; then
+      if [ "$#" -eq 0 ] &&
+        [ "$("$HOME/.local/bin/dotfiles-fingerprint")" = "$(cat "$state/built" 2>/dev/null)" ]; then
+        echo "rebuild: nothing changed; the new system starts at the next boot. Reboot to use it."
+        exit 0
+      fi
+      echo "rebuild: a new system waits for the next boot, so this is 'rebuild boot'."
+      echo "         Reboot afterwards; 'rebuild switch' would switch now anyway."
+      mode=boot
+    fi
+    ;;
 esac
 nh os "$mode" "$@"
 if [ "$mode" != build ]; then
-  state="${XDG_STATE_HOME:-$HOME/.local/state}/dotfiles"
   mkdir -p "$state"
   "$HOME/.local/bin/dotfiles-fingerprint" > "$state/built"
   pkill -RTMIN+8 waybar || true # the bar checks again now
