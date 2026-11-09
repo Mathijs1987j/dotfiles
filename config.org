@@ -5048,6 +5048,13 @@ the blocks exactly as written, so this rule is the only one to remember.
 Test a snippet with =C-c C-t= in its file (=M-x yas-visit-snippet-file=):
 that expands it in a scratch buffer.
 
+*New snippets work at once.* yasnippet reads its folders only when Emacs
+starts, so a snippet tangled later stays unknown to it until
+=M-x yas-reload-all=. =MJ-reload-snippets= does that after every tangle
+(=advice-add ... :after= runs it straight after =MJ-tangle-config=), so
+saving config.org is enough. Open buffers get the new snippets too. The
+reload is quiet, so the tangle report stays in the echo area.
+
 #+begin_src emacs-lisp
 (use-package yasnippet
   :init
@@ -5057,6 +5064,14 @@ that expands it in a scratch buffer.
   (yas-global-mode 1))
 
 (use-package yasnippet-snippets)
+
+(defun MJ-reload-snippets (&rest _)
+  "After tangling config.org: reload snippets, so new ones work at once."
+  (when (bound-and-true-p yas-global-mode)
+    (let ((inhibit-message t))          ; keep the tangle report visible
+      (yas-reload-all))))
+
+(advice-add 'MJ-tangle-config :after #'MJ-reload-snippets)
 #+end_src
 
 *** LaTeX: a new document with the preamble (=newd=)

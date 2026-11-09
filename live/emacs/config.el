@@ -290,6 +290,14 @@ older versions need the separate typescript-language-server."
 
 (use-package yasnippet-snippets)
 
+(defun MJ-reload-snippets (&rest _)
+  "After tangling config.org: reload snippets, so new ones work at once."
+  (when (bound-and-true-p yas-global-mode)
+    (let ((inhibit-message t))          ; keep the tangle report visible
+      (yas-reload-all))))
+
+(advice-add 'MJ-tangle-config :after #'MJ-reload-snippets)
+
 (use-package apheleia
   :hook ((python-base-mode js-base-mode css-base-mode web-mode) . apheleia-mode)
   :config
