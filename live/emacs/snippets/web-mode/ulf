@@ -1,0 +1,6 @@
+# -*- mode: snippet -*-
+# GENERATED from config.org ("Emacs / Snippets"). Do not edit; edit config.org.
+# name: Unordere-list-with-fragments
+# key: ulf
+# --
+ul>li.fragment$0

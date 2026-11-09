@@ -1,6 +1,6 @@
 #+TITLE: Configuration: NixOS, Emacs and LaTeX
 #+AUTHOR: MJ
-#+DATE: 2026-11-07
+#+DATE: 2026-11-09
 #+STARTUP: overview
 #+PROPERTY: header-args :mkdirp yes :noweb yes :eval no
 #+PROPERTY: header-args:emacs-lisp :tangle live/emacs/config.el :eval yes
@@ -1356,6 +1356,12 @@ USB drives mounted on demand, and NTFS for the WD drives.
   # External drives formatted for Windows (WD Elements: NTFS or exFAT). The
   # kernel reads and writes both; this adds the ntfs-3g tools (ntfsfix).
   boot.supportedFilesystems.ntfs = true;
+  # NixOS's kernel also builds =tiny_power_button=, which turns the power-button
+  # signal the firmware sends on waking from sleep into an immediate power-off
+  # (nixpkgs issue #577729, kernel 6.18.57). The normal =button= driver handles
+  # the power button fine, so the tiny one is switched off. Remove this line
+  # once the issue is closed.
+  boot.blacklistedKernelModules = [ "tiny_power_button" ];
 }
 #+end_src
 
@@ -5078,7 +5084,7 @@ $0
 
 *** HTML: a reveal.js deck (=revs=)
 
-reveal.js 6 with its files in =dist/=, the course's =custom.css=, JSXGraph
+template for slide deck reveal.js 6 with its files in =dist/=, the course's =custom.css=, JSXGraph
 from the internet, and the notation from =mj-notation.js= (see
 [[*Mathematical notation: one source for LaTeX and slides][Mathematical notation]]) with MathJax 4, so the deck itself contains no
 backslashes and no MathJax macros. =mj-notation.js= and =custom.css= must
@@ -5175,7 +5181,7 @@ A snippet for creating normal form tables in html (works best with custom.css in
 </table>
 #+end_src
 
-Snippet for data-fragment-index
+A snippet for data-fragment-index
 #+begin_src snippet :tangle live/emacs/snippets/web-mode/dfi
 # -*- mode: snippet -*-
 # GENERATED from config.org ("Emacs / Snippets"). Do not edit; edit config.org.
@@ -5183,6 +5189,16 @@ Snippet for data-fragment-index
 # key: dfi
 # --
 data-fragment-index="$1"$0
+#+end_src
+
+A snippet for emmet ready unordered list with fragment list elements
+#+begin_src snippet :tangle live/emacs/snippets/web-mode/ulf
+# -*- mode: snippet -*-
+# GENERATED from config.org ("Emacs / Snippets"). Do not edit; edit config.org.
+# name: Unordere-list-with-fragments
+# key: ulf
+# --
+ul>li.fragment$0
 #+end_src
 ** Formatting (Apheleia)
 
