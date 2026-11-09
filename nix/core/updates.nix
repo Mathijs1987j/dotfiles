@@ -15,6 +15,7 @@ let
     name = "dotfiles-update";
     runtimeInputs = [
       pkgs.coreutils
+      pkgs.getent # waiting for the network after sleep
       pkgs.git
       pkgs.util-linux # runuser
       config.nix.package

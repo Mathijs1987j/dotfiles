@@ -610,6 +610,12 @@ the bar (the red "failed" item).
 The service builds what is in =~/dotfiles= at that moment, including
 uncommitted changes, just like =rebuild=.
 
+If the machine was asleep at noon, the timer catches up the moment the lid
+opens, often before the Wi-Fi is back; and =network-online.target= does not
+help, because it was reached at boot and stays reached through sleep. So the
+job first waits up to five minutes until GitHub can be found. If the network
+is still missing after that, it fails as before and the bar shows it.
+
 #+begin_src nix
 # GENERATED from config.org ("Foundations / Weekly updates"). Do not edit; edit config.org.
 # nix/core/updates.nix: the weekly update of flake.lock and of the system
@@ -628,6 +634,7 @@ let
     name = "dotfiles-update";
     runtimeInputs = [
       pkgs.coreutils
+      pkgs.getent # waiting for the network after sleep
       pkgs.git
       pkgs.util-linux # runuser
       config.nix.package
@@ -677,6 +684,13 @@ this text. The commands that touch your repository run as you
 # $home, $host and $release before this text.
 # As you, with your own home folder (for git's settings and Nix's cache).
 as_user() { runuser -u "$user" -- env HOME="$home" "$@"; }
+
+# 0. After waking from sleep the timer can fire before the Wi-Fi is back:
+#    wait up to five minutes until GitHub's name resolves.
+for _ in $(seq 30); do
+  getent hosts api.github.com > /dev/null && break
+  sleep 10
+done
 
 # 1. Newer versions of every input.
 as_user nix flake update --flake "$repo"
@@ -4350,6 +4364,12 @@ What happens when =config.org= is saved, in a file of its own so the
    NixOS whether a rebuild is needed (the same question as =dotfiles-status=)
    and whether niri accepts its settings.
 
+The repository folder is found by looking upwards from this file for
+=flake.nix=, not by counting folders: when this block is evaluated with
+=C-c C-c= in =config.org=, "this file" is =config.org= itself, and "two
+levels up" then pointed at =/home/= (an empty =config.org<home>= on =C-c i=,
+and no tangling on save).
+
 #+begin_src emacs-lisp :tangle live/emacs/dotfiles-tangle.el
 ;;; dotfiles-tangle.el --- GENERATED from config.org ("Emacs / Tangling"). Do not edit.  -*- lexical-binding: t; -*-
 
@@ -4362,11 +4382,15 @@ What happens when =config.org= is saved, in a file of its own so the
 (require 'seq)
 (require 'subr-x)
 
+;; The repository is the nearest folder above this file that holds
+;; flake.nix. That gives the same answer whether this file is loaded
+;; (from live/emacs/) or this block is evaluated with C-c C-c in config.org;
+;; "two levels up" gave /home/ in the second case.
 (defconst MJ-dotfiles-dir
   (file-name-as-directory
-   (expand-file-name "../.." (file-name-directory
-                              (or load-file-name buffer-file-name))))
-  "The dotfiles repository: two levels above live/emacs/.")
+   (expand-file-name
+    (locate-dominating-file (or load-file-name buffer-file-name) "flake.nix")))
+  "The dotfiles repository: the nearest folder above this file with flake.nix.")
 
 (defconst MJ-config-file (expand-file-name "config.org" MJ-dotfiles-dir)
   "The literate configuration.")

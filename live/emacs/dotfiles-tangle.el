@@ -9,11 +9,15 @@
 (require 'seq)
 (require 'subr-x)
 
+;; The repository is the nearest folder above this file that holds
+;; flake.nix. That gives the same answer whether this file is loaded
+;; (from live/emacs/) or this block is evaluated with C-c C-c in config.org;
+;; "two levels up" gave /home/ in the second case.
 (defconst MJ-dotfiles-dir
   (file-name-as-directory
-   (expand-file-name "../.." (file-name-directory
-                              (or load-file-name buffer-file-name))))
-  "The dotfiles repository: two levels above live/emacs/.")
+   (expand-file-name
+    (locate-dominating-file (or load-file-name buffer-file-name) "flake.nix")))
+  "The dotfiles repository: the nearest folder above this file with flake.nix.")
 
 (defconst MJ-config-file (expand-file-name "config.org" MJ-dotfiles-dir)
   "The literate configuration.")

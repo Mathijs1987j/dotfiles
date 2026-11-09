@@ -4,6 +4,13 @@
 # As you, with your own home folder (for git's settings and Nix's cache).
 as_user() { runuser -u "$user" -- env HOME="$home" "$@"; }
 
+# 0. After waking from sleep the timer can fire before the Wi-Fi is back:
+#    wait up to five minutes until GitHub's name resolves.
+for _ in $(seq 30); do
+  getent hosts api.github.com > /dev/null && break
+  sleep 10
+done
+
 # 1. Newer versions of every input.
 as_user nix flake update --flake "$repo"
 
