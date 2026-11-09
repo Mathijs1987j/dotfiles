@@ -95,6 +95,21 @@
                   (car (last (split-string (string-trim (buffer-string))
                                            "\n")))))))))
 
+(defun MJ--snippet-drop-final-newline ()
+  "In a tangled snippet file: remove the newline Org adds at the end.
+yasnippet would otherwise insert it as part of the snippet."
+  (when (and buffer-file-name
+             (file-in-directory-p
+              buffer-file-name
+              (expand-file-name "live/emacs/snippets" MJ-dotfiles-dir)))
+    (goto-char (point-max))
+    (when (eq (char-before) ?\n)
+      (delete-char -1)
+      (setq-local require-final-newline nil)
+      (save-buffer))))
+
+(add-hook 'org-babel-post-tangle-hook #'MJ--snippet-drop-final-newline)
+
 (defun MJ-tangle-config ()
   "Tangle config.org completely, remove stale generated files, stage, report."
   (interactive)

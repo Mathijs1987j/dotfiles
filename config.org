@@ -4448,6 +4448,21 @@ What happens when =config.org= is saved, in a file of its own so the
                   (car (last (split-string (string-trim (buffer-string))
                                            "\n")))))))))
 
+(defun MJ--snippet-drop-final-newline ()
+  "In a tangled snippet file: remove the newline Org adds at the end.
+yasnippet would otherwise insert it as part of the snippet."
+  (when (and buffer-file-name
+             (file-in-directory-p
+              buffer-file-name
+              (expand-file-name "live/emacs/snippets" MJ-dotfiles-dir)))
+    (goto-char (point-max))
+    (when (eq (char-before) ?\n)
+      (delete-char -1)
+      (setq-local require-final-newline nil)
+      (save-buffer))))
+
+(add-hook 'org-babel-post-tangle-hook #'MJ--snippet-drop-final-newline)
+
 (defun MJ-tangle-config ()
   "Tangle config.org completely, remove stale generated files, stage, report."
   (interactive)
@@ -4525,6 +4540,9 @@ What happens when =config.org= is saved, in a file of its own so the
 
 ;;; dotfiles-tangle.el ends here
 #+end_src
+
+#+RESULTS:
+: MJ-tangle-batch
 
 The =tangle-config= command, for a terminal or a machine without a running
 Emacs. (Not =tangle=: TeX Live already has a program of that name, Knuth's
