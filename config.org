@@ -6057,7 +6057,7 @@ if [ "$(readlink -f /run/booted-system/kernel)" != "$(readlink -f /run/current-s
 fi
 #+end_src
 
-** COMMENT Health and backups: nix/server/health.nix
+** Health and backups: nix/server/health.nix
 :PROPERTIES:
 :header-args:nix: :tangle nix/server/health.nix
 :END:
@@ -6087,14 +6087,9 @@ readable only by root.
 
   # The second WD drive, kept as it is (NTFS, contents untouched); the
   # backup goes in a folder of its own. Its label: lsblk -f.
-  fileSystems."/srv/backup" = {
-    device = "/dev/disk/by-uuid/2624D3B024D380EB";
-    fsType = "ntfs3";
-    options = [ "nofail" "x-systemd.device-timeout=10s" ];
-  };
-
+  
   services.restic.backups.server = {
-    repository = "/srv/backup/restic";
+    repository = repository = "/srv/torrents/server-backup/restic";
     passwordFile = "/var/lib/secrets/restic"; # made by hand; never in git
     initialize = true;
     paths = [ "/var/lib" "/home/${username}" ];
@@ -6102,6 +6097,9 @@ readable only by root.
     timerConfig.OnCalendar = "03:00"; # before the nightly update at 04:00
     pruneOpts = [ "--keep-daily 7" "--keep-weekly 5" "--keep-monthly 12" ];
   };
+  
+  # Back up only when the torrent drive is there.
+  systemd.services.restic-backups-server.unitConfig.RequiresMountsFor = [ "/srv/torrents" ];
 }
 #+end_src
 
