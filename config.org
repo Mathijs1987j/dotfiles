@@ -5884,8 +5884,7 @@ kernel's own NTFS driver; =nofail= lets the server boot when the drive is
 unplugged, and qBittorrent waits for the drive (=RequiresMountsFor=)
 rather than filling the empty folder underneath it.
 
-The drive is found by its label. Look it up once with =lsblk -f= and put it
-in =device= (or use =/dev/disk/by-uuid/...=).
+The drive is found by its UUID. 
 
 *Settings* such as the download folder, speed limits and the web password
 are chosen in the web interface and kept in qBittorrent's own files
@@ -5911,7 +5910,7 @@ qBittorrent prints a temporary web password in its log:
   # The WD drive, NTFS, at /srv/torrents. Change the label to the drive's
   # own (lsblk -f).
   fileSystems."/srv/torrents" = {
-    device = "/dev/disk/by-label/WD";
+    device = "/dev/disk/by-uuid/2624D3B024D380EB;
     fsType = "ntfs3";
     options = [
       "uid=1000" # your account (id -u)
@@ -6089,7 +6088,7 @@ readable only by root.
   # The second WD drive, kept as it is (NTFS, contents untouched); the
   # backup goes in a folder of its own. Its label: lsblk -f.
   fileSystems."/srv/backup" = {
-    device = "/dev/disk/by-label/WD20"; # change to the drive's own label
+    device = "/dev/disk/by-uuid/2624D3B024D380EB";
     fsType = "ntfs3";
     options = [ "nofail" "x-systemd.device-timeout=10s" ];
   };
