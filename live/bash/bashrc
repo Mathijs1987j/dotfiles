@@ -25,6 +25,7 @@ alias gs='git status'
 alias gl='git log --oneline --graph --decorate -20'
 # Disks
 alias dfh='df -h -x tmpfs -x devtmpfs -x efivarfs'
+alias failed='systemctl --failed'    # services that did not start
 
 # mkcd DIR: make a folder and go into it
 mkcd() { mkdir -p -- "$1" && cd -- "$1"; }
