@@ -1,0 +1,8 @@
+# GENERATED from config.org ("Internet / qBittorrent on the server"). Do not edit; edit config.org.
+[Desktop Entry]
+Type=Application
+Name=qBittorrent (server)
+Exec=qbittorrent-web
+Icon=qbittorrent
+Categories=Network;
+StartupWMClass=qbittorrent-web

@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+# GENERATED from config.org ("Internet / qBittorrent on the server"). Do not edit; edit config.org.
+# qbittorrent-web: the server's qBittorrent page in its own LibreWolf window.
+profile="${XDG_DATA_HOME:-$HOME/.local/share}/librewolf-qbittorrent"
+mkdir -p "$profile"
+exec librewolf --profile "$profile" --name qbittorrent-web --class qbittorrent-web \
+  http://server.local:8080 "$@"

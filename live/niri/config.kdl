@@ -73,6 +73,7 @@ hotkey-overlay {
 // Where windows open. Find an app's id with `niri msg windows` while it runs.
 window-rule {
     match app-id=r#"^(librewolf|firefox)$"#
+    match app-id=r#"^qbittorrent-web$"#
     open-on-workspace "web"
 }
 window-rule {
@@ -116,6 +117,7 @@ binds {
     Mod+M hotkey-overlay-title="Mail (focus or start)" { spawn "run-or-raise" "thunderbird" "thunderbird"; }
     // Mod+Shift+W: WhatsApp Web in its own window (it opens on "chat").
     Mod+Shift+W hotkey-overlay-title="WhatsApp (focus or start)" { spawn "run-or-raise" "whatsapp" "whatsapp-web"; }
+    Mod+Shift+Q hotkey-overlay-title="qBittorrent (focus or start)" { spawn "run-or-raise" "qbittorrent-web" "qbittorrent-web"; }
     // Mod+S: Signal; Mod+Shift+S: Spotify. If a second press opens a second
     // copy, the app id differs: check with `niri msg windows`.
     Mod+S hotkey-overlay-title="Signal (focus or start)" { spawn "run-or-raise" "signal" "signal-desktop"; }
