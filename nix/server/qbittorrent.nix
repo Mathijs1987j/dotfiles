@@ -12,8 +12,8 @@
     openFirewall = true; # opens both ports
   };
 
-  # The WD drive, NTFS, at /srv/torrents. Change the label to the drive's
-  # own (lsblk -f).
+  # The WD 20 TB drive, NTFS, at /srv/torrents, by its UUID (lsblk -f);
+  # both WD drives are labelled "Elements".
   fileSystems."/srv/torrents" = {
     device = "/dev/disk/by-uuid/2624D3B024D380EB";
     fsType = "ntfs3";

@@ -17,8 +17,7 @@
      KEYBOARD_KEY_38=reserved
   '';
 
-  # A laptop as a server: keep running with the lid closed.
-  # (Check the option names in the release notes when you set this up.)
+  # A laptop as a server: keep running when the lid is closed.
   services.logind.settings.Login = {
     HandleLidSwitch = "ignore";
     HandleLidSwitchExternalPower = "ignore";
@@ -26,19 +25,22 @@
   };
 
   # With the lid open (on the bookcase): blank the text console after 60 s,
-  # which on most laptops also switches the backlight off. Uncomment to use.
+  # which also switches the backlight off. Applies after a reboot; if the
+  # screen stays lit after a deploy, reboot once.
   boot.kernelParams = [ "consoleblank=60" ];
 
-  # Only if the backlight stays lit: set it to 0 at every boot. Needs pkgs
-  # in this file's first line: { pkgs, hostName, ... }:
-  # systemd.services.backlight-off = {
-  #   wantedBy = [ "multi-user.target" ];
-  #   serviceConfig.Type = "oneshot";
-  #   script = "${pkgs.brightnessctl}/bin/brightnessctl --class=backlight set 0";
-  # };
-
-  # The second internal drive: start even if it is missing or broken.
-  fileSystems."/srv/data".options = [ "nofail" ];
+  # The screen's backlight off at every start, and at the deploy that adds
+  # this, whatever the console does (blanking alone did not last).
+  systemd.services.backlight-off = {
+    description = "Switch the screen's backlight off";
+    wantedBy = [ "multi-user.target" ];
+    serviceConfig.Type = "oneshot";
+    script = ''
+      for d in /sys/class/backlight/*; do
+        echo 0 > "$d/brightness"
+      done
+    '';
+  };
 
   system.stateVersion = "26.05";
 }

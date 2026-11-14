@@ -63,7 +63,7 @@
         # The new laptop: install with  nixos-install --flake .#laptop
         laptop = mkHost "laptop" [ "desktop" ];
 
-        # The EliteBook as home server, once its fan is repaired:
+        # The EliteBook as home server, installed on 14 November 2026:
         server = mkHost "server" [ "server" ];
       };
     };
