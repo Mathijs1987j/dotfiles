@@ -316,7 +316,7 @@ flake's inputs, your login name and the machine's name.
         # The new laptop: install with  nixos-install --flake .#laptop
         laptop = mkHost "laptop" [ "desktop" ];
 
-        # The EliteBook as home server, once its fan is repaired:
+        # The EliteBook as home server, installed on 14 November 2026:
         server = mkHost "server" [ "server" ];
       };
     };
@@ -944,14 +944,16 @@ themselves from the installers you put in =~/Games/installers= (see
 }
 #+end_src
 
-** server: the EliteBook as home server (later)
+** server: the EliteBook as home server
 :PROPERTIES:
 :header-args:nix: :tangle nix/hosts/server/default.nix
 :END:
 
-For when the EliteBook's fan is repaired and it becomes the home server
-(chapter [[*Home server (role: server)][Home server]]). Switched on by uncommenting its line in
-[[*Outputs: machines and roles][Outputs]].
+The EliteBook as the home server (chapter [[*Home server (role: server)][Home server]]), installed on
+14 November 2026 from the minimal ISO, over SSH from the laptop. Its
+=hardware-configuration.nix= describes two internal NVMe drives: the system
+drive, and the data drive at =/srv/data=. Its fan is still broken, so it is
+kept to light work.
 
 #+begin_src nix
 # GENERATED from config.org ("Machines / server"). Do not edit; edit config.org.
@@ -973,8 +975,7 @@ For when the EliteBook's fan is repaired and it becomes the home server
      KEYBOARD_KEY_38=reserved
   '';
 
-  # A laptop as a server: keep running with the lid closed.
-  # (Check the option names in the release notes when you set this up.)
+  # A laptop as a server: keep running when the lid is closed.
   services.logind.settings.Login = {
     HandleLidSwitch = "ignore";
     HandleLidSwitchExternalPower = "ignore";
@@ -982,7 +983,8 @@ For when the EliteBook's fan is repaired and it becomes the home server
   };
 
   # With the lid open (on the bookcase): blank the text console after 60 s,
-  # which on most laptops also switches the backlight off. Uncomment to use.
+  # which also switches the backlight off. Applies after a reboot; if the
+  # screen stays lit after a deploy, reboot once.
   boot.kernelParams = [ "consoleblank=60" ];
 
   # Only if the backlight stays lit: set it to 0 at every boot. Needs pkgs
@@ -5906,11 +5908,12 @@ install, so a new =use-package= form takes a save /and/ a =rebuild=; a
 changed setting takes only the save.
 * Home server (role: server)
 
-Everything in =nix/server/= is for the EliteBook once its fan is repaired:
-torrents on the WD drive, reachable from the laptop as =server.local=. It
-gets the core role (shell, git, tmux) but no desktop. Nothing here is built
-until the =server= line in [[*Outputs: machines and roles][Outputs]] is
-uncommented and the machine is installed (see the companion document).
+Everything in =nix/server/= is for the EliteBook as home server, installed
+on 14 November 2026: torrents and the nightly backup on the WD 20 TB drive,
+reachable from the laptop as =server.local= (=ssh server=). It gets the core
+role (shell, git, tmux) but no desktop. Changes reach it through
+=deploy-server= on the laptop, or through the nightly update; the companion
+guide, /NixOS from the Ground Up/, chapter 24, explains both.
 
 ** Torrents: nix/server/qbittorrent.nix
 :PROPERTIES:
@@ -5918,8 +5921,8 @@ uncommented and the machine is installed (see the companion document).
 :END:
 
 qBittorrent without a window (=qbittorrent-nox=), as a system service that
-starts at boot, controlled from the laptop's browser at
-=http://server.local:8080=. It runs as your own account, so the files it
+starts at boot, controlled from its web page at =http://server.local:8080=
+(on the laptop: =Mod+Shift+Q=, see [[*qBittorrent on the server: nix/desktop/qbittorrent-web.nix][qBittorrent on the server]]). It runs as your own account, so the files it
 downloads to the WD drive are yours and the torrent list moved from Windows
 keeps working without changing owners.
 
@@ -5928,13 +5931,16 @@ kernel's own NTFS driver; =nofail= lets the server boot when the drive is
 unplugged, and qBittorrent waits for the drive (=RequiresMountsFor=)
 rather than filling the empty folder underneath it.
 
-The drive is found by its UUID. 
+The drive is the WD 20 TB drive, found by its UUID (=lsblk -f= shows it):
+both WD drives carry WD's label =Elements=, so a label cannot tell them
+apart. The same drive holds the server's backup ([[*Health and backups: nix/server/health.nix][Health and backups]]).
 
 *Settings* such as the download folder, speed limits and the web password
 are chosen in the web interface and kept in qBittorrent's own files
-(state, see [[*State: what is not in this file][State]]). On first start
-qBittorrent prints a temporary web password in its log:
-=journalctl -u qbittorrent=.
+(state, see [[*State: what is not in this file][State]]). Until you set a web password of your
+own, qBittorrent makes up a temporary one at every start and prints it in
+its log: =journalctl -u qbittorrent | grep password | tail -1=. The user
+name is =admin=.
 
 #+begin_src nix
 # GENERATED from config.org ("Home server / Torrents"). Do not edit; edit config.org.
@@ -5951,8 +5957,8 @@ qBittorrent prints a temporary web password in its log:
     openFirewall = true; # opens both ports
   };
 
-  # The WD drive, NTFS, at /srv/torrents. Change the label to the drive's
-  # own (lsblk -f).
+  # The WD 20 TB drive, NTFS, at /srv/torrents, by its UUID (lsblk -f);
+  # both WD drives are labelled "Elements".
   fileSystems."/srv/torrents" = {
     device = "/dev/disk/by-uuid/2624D3B024D380EB";
     fsType = "ntfs3";
@@ -6106,21 +6112,21 @@ fi
 :header-args:nix: :tangle nix/server/health.nix
 :END:
 
-Not active yet: =COMMENT= in the heading makes Org skip this section when
-tangling. To switch it on, remove the word (=C-c ;= on the heading), save,
-commit, =deploy-server=.
-
-smartd watches every drive for early signs of failure; restic backs up the
-server's state and your home folder every night to the second WD drive,
-which stays NTFS with its contents: restic keeps its backup as ordinary
-files in one folder, =/srv/backup/restic=. Its password is a secret, so it
-lives in a file made once on the server, never here: =sudo mkdir -p
-/var/lib/secrets=, then a long random password in =/var/lib/secrets/restic=,
-readable only by root.
+smartd watches every drive for early signs of failure (=journalctl -u
+smartd=). restic backs up the server's state (=/var/lib=, with qBittorrent's
+torrent list, totals and settings) and your home folder every night at
+03:00, into a folder on the torrent drive, =/srv/torrents/server-backup/restic=.
+It keeps its backup as ordinary files in that one folder, so the rest of the
+drive is left alone, and it waits for the drive (=RequiresMountsFor=), so it
+never fills the internal disk instead. The torrents' own files are not in
+it. Its password is a secret, so it lives in a file made once on the server,
+never here: =/var/lib/secrets/restic=, readable only by root, with a copy in
+KeePassXC. To run it now: =sudo systemctl start restic-backups-server=;
+=journalctl -u restic-backups-server= shows how it went.
 
 #+begin_src nix
 # GENERATED from config.org ("Home server / Health and backups"). Do not edit; edit config.org.
-# nix/server/health.nix: drive health, and nightly backups to the second WD drive.
+# nix/server/health.nix: drive health, and nightly backups to the torrent drive.
 { username, ... }:
 
 {
@@ -6129,8 +6135,8 @@ readable only by root.
     autodetect = true;
   };
 
-# The backup goes in a folder on the torrent drive (/srv/torrents); no mount of its own.
-  
+  # The backup goes in a folder on the torrent drive (/srv/torrents); no
+  # mount of its own.
   services.restic.backups.server = {
     repository = "/srv/torrents/server-backup/restic";
     passwordFile = "/var/lib/secrets/restic"; # made by hand; never in git
@@ -6140,7 +6146,7 @@ readable only by root.
     timerConfig.OnCalendar = "03:00"; # before the nightly update at 04:00
     pruneOpts = [ "--keep-daily 7" "--keep-weekly 5" "--keep-monthly 12" ];
   };
-  
+
   # Back up only when the torrent drive is there.
   systemd.services.restic-backups-server.unitConfig.RequiresMountsFor = [ "/srv/torrents" ];
 }
@@ -6169,37 +6175,30 @@ over by hand.
 | Caesar III saves           | =~/.local/share/caesar3= (=*.sav=)                           | copy the =.sav= files from the old game folder    |
 | Civilization IV saves, BUG | Wine prefix, =My Games/Beyond the Sword=                     | copy =Saves= and =BUG= settings into the prefix   |
 | Game installers            | =~/Games/installers=                                         | copy from GOG or the old machine                  |
-| Torrents and statistics    | qBittorrent's profile on the server                          | see below                                         |
+| Torrents and statistics    | =/var/lib/qBittorrent= on the server                         | in the nightly backup; see below                  |
 | Machine identity           | =/etc/ssh/ssh_host_*=, =hardware-configuration.nix=          | new per machine                                   |
 
 ** Moving the torrent list to the server
 
-qBittorrent keeps one =.torrent= and one =.fastresume= file per torrent in
-its =BT_backup= folder; the =.fastresume= file holds the statistics (total
-uploaded, time active, the save folder). Moved together, they bring every
-torrent across with its history. On Windows the folder is
-=%LOCALAPPDATA%\qBittorrent\BT_backup=.
+Done on 14 November 2026, for 383 torrents; the companion guide's section
+"Moving the torrent list" has every detail. qBittorrent keeps one
+=.torrent= and one =.fastresume= file per torrent in its =BT_backup= folder
+(on Windows =%LOCALAPPDATA%\qBittorrent\BT_backup=); the =.fastresume= holds
+the statistics and the save folder. The save folders are Windows paths, and
+each =.fastresume= holds two: =save_path= (with backslashes) and
+=qBt-savePath= (with forward slashes, or empty). =qbt_migrate= rewrites
+them, on the laptop, with the old folder written in forward slashes: once
+per old folder, and twice each, because the first run rewrites
+=qBt-savePath= and the second =save_path=.
 
-The save folders inside the =.fastresume= files are Windows paths
-(=E:\Torrents=). =qbt_migrate= rewrites them:
-
-1. On Windows: quit qBittorrent, and copy =BT_backup= to a USB stick or the
-   WD drive.
-2. On the server: =sudo systemctl stop qbittorrent=.
-3. Copy the files into the service's =BT_backup= folder
-   (=/var/lib/qBittorrent/qBittorrent/data/BT_backup=; =ls= to check the
-   exact path).
-4. Rewrite the paths with =qbt_migrate=, run from a temporary Python
-   environment by =uvx=. If the WD drive was =E:= on Windows (its root
-   becoming =/srv/torrents=), first look at what would change:
-   =uvx qbt_migrate -b /var/lib/qBittorrent/qBittorrent/data/BT_backup -e E: -n /srv/torrents -t Linux -d=
-   (=-b= the folder, =-e= the old start of the paths, =-n= the new one,
-   =-t Linux= turns =\= into =/=, =-d= only shows). Then run the same
-   command without =-d=; it saves a zip backup first. Leave out a trailing
-   =\= after the drive letter.
-5. =sudo systemctl start qbittorrent=, open =http://server.local:8080=,
-   and let qBittorrent check a few torrents (right-click, /Force recheck/)
-   to confirm it finds the files.
+1. Copy =BT_backup= to the laptop as =~/BT_backup=.
+2. =uvx qbt_migrate -b ~/BT_backup -e 'D:/Bigly2' -n /srv/torrents/Bigly_EliteBook -t Linux=,
+   twice, and the same for ='C:/Users/moiss/Documents/Bigly'=. With =-d=
+   added, it only shows what it would change.
+3. =scp -r ~/BT_backup server:=; then on the server
+   =sudo systemctl stop qbittorrent=, copy the =.torrent= and =.fastresume=
+   files into =/var/lib/qBittorrent/qBittorrent/data/BT_backup=, and
+   =sudo systemctl start qbittorrent=.
 
 The categories and tags are in =categories.json= next to the
 configuration; copy it as well if you use them.
@@ -6208,7 +6207,7 @@ configuration; copy it as well if you use them.
 
 The repository is on GitHub; =flake.lock= and the generated files are
 committed with it. Everything in the table above wants a backup of its
-own: the home folder (without =~/.cache=) to the WD drive or the cloud,
-and the server's =/var/lib/qBittorrent= alongside it. The KeePassXC vault
+own: the home folder (without =~/.cache=) to the WD drive or the cloud.
+The server backs up its own state every night ([[*Health and backups: nix/server/health.nix][Health and backups]]). The KeePassXC vault
 above all: keep a recent copy on the WD drive; it is encrypted, so a copy
 anywhere is safe as long as the master password is strong.
