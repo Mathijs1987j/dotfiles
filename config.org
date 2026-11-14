@@ -6132,6 +6132,7 @@ KeePassXC. To run it now: =sudo systemctl start restic-backups-server=;
 { username, ... }:
 
 {
+  services.thermald.enable = true; # slows the processor down before it overheats
   services.smartd = {
     enable = true; # watches every drive's health (smartctl -a /dev/sdX by hand)
     autodetect = true;
@@ -6151,6 +6152,38 @@ KeePassXC. To run it now: =sudo systemctl start restic-backups-server=;
 
   # Back up only when the torrent drive is there.
   systemd.services.restic-backups-server.unitConfig.RequiresMountsFor = [ "/srv/torrents" ];
+}
+#+end_src
+
+** Ad blocking: nix/server/adguardhome.nix
+:PROPERTIES:
+:header-args:nix: :tangle nix/server/adguardhome.nix
+:END:
+
+AdGuard Home answers the network's DNS questions and refuses the ones for
+advertising and tracking servers. Its page is =http://server.local:3000=.
+Everything chosen there (the administrator's password, upstream servers,
+blocklists, exceptions, the log) is state, in =/var/lib/AdGuardHome=, and is
+in the nightly backup. Which devices ask it is decided elsewhere: on a
+device, in Tailscale's console, or by letting it hand out addresses
+(=allowDHCP=); /Home Server Services/, chapter 2, has the three ways.
+
+#+begin_src nix
+# GENERATED from config.org ("Home server / Ad blocking"). Do not edit; edit config.org.
+# nix/server/adguardhome.nix: AdGuard Home, the DNS filter for the home network.
+{ ... }:
+
+{
+  services.adguardhome = {
+    enable = true;
+    port = 3000; # the web page: http://server.local:3000
+    openFirewall = true; # opens the web page's port only, not DNS
+    # allowDHCP = true; # only when AdGuard Home also hands out addresses
+  };
+
+  # DNS itself: port 53, over UDP and (for long answers) over TCP.
+  networking.firewall.allowedTCPPorts = [ 53 ];
+  networking.firewall.allowedUDPPorts = [ 53 ]; # 67 as well for DHCP
 }
 #+end_src
 
