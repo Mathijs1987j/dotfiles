@@ -8,8 +8,7 @@
     autodetect = true;
   };
 
-  # The second WD drive, kept as it is (NTFS, contents untouched); the
-  # backup goes in a folder of its own. Its label: lsblk -f.
+# The backup goes in a folder on the torrent drive (/srv/torrents); no mount of its own.
   
   services.restic.backups.server = {
     repository = "/srv/torrents/server-backup/restic";
