@@ -317,7 +317,7 @@ flake's inputs, your login name and the machine's name.
         laptop = mkHost "laptop" [ "desktop" ];
 
         # The EliteBook as home server, once its fan is repaired:
-        # server = mkHost "server" [ "server" ];
+        server = mkHost "server" [ "server" ];
       };
     };
 }
@@ -992,6 +992,9 @@ For when the EliteBook's fan is repaired and it becomes the home server
   #   serviceConfig.Type = "oneshot";
   #   script = "${pkgs.brightnessctl}/bin/brightnessctl --class=backlight set 0";
   # };
+
+  # The second internal drive: start even if it is missing or broken.
+  fileSystems."/srv/data".options = [ "nofail" ];
 
   system.stateVersion = "26.05";
 }

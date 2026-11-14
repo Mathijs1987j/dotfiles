@@ -64,7 +64,7 @@
         laptop = mkHost "laptop" [ "desktop" ];
 
         # The EliteBook as home server, once its fan is repaired:
-        # server = mkHost "server" [ "server" ];
+        server = mkHost "server" [ "server" ];
       };
     };
 }

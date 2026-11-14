@@ -37,5 +37,8 @@
   #   script = "${pkgs.brightnessctl}/bin/brightnessctl --class=backlight set 0";
   # };
 
+  # The second internal drive: start even if it is missing or broken.
+  fileSystems."/srv/data".options = [ "nofail" ];
+
   system.stateVersion = "26.05";
 }
