@@ -15,7 +15,7 @@
   # The WD drive, NTFS, at /srv/torrents. Change the label to the drive's
   # own (lsblk -f).
   fileSystems."/srv/torrents" = {
-    device = "/dev/disk/by-uuid/2624D3B024D380EB;
+    device = "/dev/disk/by-uuid/2624D3B024D380EB";
     fsType = "ntfs3";
     options = [
       "uid=1000" # your account (id -u)
