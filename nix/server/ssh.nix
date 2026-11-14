@@ -14,7 +14,7 @@
   };
 
   users.users.${username}.openssh.authorizedKeys.keys = [
-    # "ssh-ed25519 AAAA... mathijs@laptop"
+    "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAINih+ZGH02hbjJeJwoQV0oYzQK8G/zgyMb/YHn6gmHZ+ mathijs@laptop"
   ];
 
   services.avahi.publish = {

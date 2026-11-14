@@ -25,5 +25,17 @@
     HandleLidSwitchDocked = "ignore";
   };
 
+  # With the lid open (on the bookcase): blank the text console after 60 s,
+  # which on most laptops also switches the backlight off. Uncomment to use.
+  # boot.kernelParams = [ "consoleblank=60" ];
+
+  # Only if the backlight stays lit: set it to 0 at every boot. Needs pkgs
+  # in this file's first line: { pkgs, hostName, ... }:
+  # systemd.services.backlight-off = {
+  #   wantedBy = [ "multi-user.target" ];
+  #   serviceConfig.Type = "oneshot";
+  #   script = "${pkgs.brightnessctl}/bin/brightnessctl --class=backlight set 0";
+  # };
+
   system.stateVersion = "26.05";
 }

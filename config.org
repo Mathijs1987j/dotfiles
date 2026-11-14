@@ -1,6 +1,6 @@
 #+TITLE: Configuration: NixOS, Emacs and LaTeX
 #+AUTHOR: MJ
-#+DATE: 2026-11-09
+#+DATE: 2026-11-14
 #+STARTUP: overview
 #+PROPERTY: header-args :mkdirp yes :noweb yes :eval no
 #+PROPERTY: header-args:emacs-lisp :tangle live/emacs/config.el :eval yes
@@ -110,6 +110,17 @@ changing this one value; see [[*Moving to the next release][Moving to the next r
 #+NAME: username
 #+begin_src text
 mathijs
+#+end_src
+
+*** The laptop's SSH key
+
+The public half of the laptop's key (=cat ~/.ssh/id_ed25519.pub=), inserted
+wherever a machine should let the laptop in. It is public by design, so it is
+safe in git; the private half never leaves the laptop.
+
+#+NAME: ssh-key-laptop
+#+begin_src text
+ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAINih+ZGH02hbjJeJwoQV0oYzQK8G/zgyMb/YHn6gmHZ+ mathijs@laptop
 #+end_src
 
 *** Colours
@@ -969,6 +980,18 @@ For when the EliteBook's fan is repaired and it becomes the home server
     HandleLidSwitchExternalPower = "ignore";
     HandleLidSwitchDocked = "ignore";
   };
+
+  # With the lid open (on the bookcase): blank the text console after 60 s,
+  # which on most laptops also switches the backlight off. Uncomment to use.
+  # boot.kernelParams = [ "consoleblank=60" ];
+
+  # Only if the backlight stays lit: set it to 0 at every boot. Needs pkgs
+  # in this file's first line: { pkgs, hostName, ... }:
+  # systemd.services.backlight-off = {
+  #   wantedBy = [ "multi-user.target" ];
+  #   serviceConfig.Type = "oneshot";
+  #   script = "${pkgs.brightnessctl}/bin/brightnessctl --class=backlight set 0";
+  # };
 
   system.stateVersion = "26.05";
 }
@@ -2485,6 +2508,81 @@ regular6=<<teal>>
 regular7=<<subtext>>
 bright0=<<surface2>>
 bright7=<<text>>
+#+end_src
+
+** Reaching the server: nix/desktop/server-access.nix
+:PROPERTIES:
+:header-args:nix: :tangle nix/desktop/server-access.nix
+:END:
+
+=ssh server= instead of =ssh mathijs@server.local=, and =deploy-server=,
+which brings the server up to date with this repository (see
+[[*Home server (role: server)][Home server]]). The SSH settings are live: a
+change applies at the next connection. One connection stays open for ten
+minutes, so a deploy asks for your sudo password on the server only once.
+
+#+begin_src nix
+# GENERATED from config.org ("Desktop / Reaching the server"). Do not edit; edit config.org.
+# nix/desktop/server-access.nix: SSH settings and deploy-server.
+{ ... }:
+
+{
+  dotfiles.links = {
+    ".ssh/config" = "live/ssh/config";
+    ".local/bin/deploy-server" = "live/bin/deploy-server";
+  };
+}
+#+end_src
+
+#+begin_src conf :tangle live/ssh/config
+# GENERATED from config.org ("Desktop / Reaching the server"). Do not edit; edit config.org.
+Host server
+    HostName server.local
+    User mathijs
+    # Reuse one connection for ten minutes (deploys open several).
+    ControlMaster auto
+    ControlPath ~/.ssh/cm-%r@%h:%p
+    ControlPersist 10m
+#+end_src
+
+=deploy-server= does three things: push, let the server pull the live files,
+and, only when the Nix files changed since the last deploy, build the
+server's system here on the laptop and switch the server to it.
+=deploy-server --force= rebuilds regardless. The fingerprint covers all Nix
+files, so a desktop change also triggers a (quick, harmless) server build.
+nixos-rebuild's remote flags were renamed in recent releases; if =--sudo= or
+=--ask-sudo-password= is refused, =nixos-rebuild --help= names the current
+ones.
+
+#+begin_src sh :tangle live/bin/deploy-server :tangle-mode o755
+#!/usr/bin/env bash
+# GENERATED from config.org ("Desktop / Reaching the server"). Do not edit; edit config.org.
+# deploy-server [--force]: bring the server up to date with this repository.
+set -euo pipefail
+cd "$HOME/dotfiles"
+
+# The server always runs a commit.
+if [ -n "$(git status --porcelain -- flake.nix flake.lock nix live)" ]; then
+  echo "deploy-server: commit first; the server always runs a commit." >&2
+  exit 1
+fi
+
+# Live files: push, and let the server pull them. No rebuild.
+git push --quiet
+ssh server 'git -C ~/dotfiles pull --ff-only --quiet'
+echo "deploy-server: live files updated"
+
+# Nix files: build here, switch there; only when they changed.
+state="${XDG_STATE_HOME:-$HOME/.local/state}/dotfiles"
+now=$("$HOME/.local/bin/dotfiles-fingerprint")
+if [ "${1:-}" = --force ] || [ "$now" != "$(cat "$state/deployed-server" 2>/dev/null)" ]; then
+  nixos-rebuild switch --flake .#server --target-host server --sudo --ask-sudo-password
+  mkdir -p "$state"
+  echo "$now" > "$state/deployed-server"
+  echo "deploy-server: the server runs the new system"
+else
+  echo "deploy-server: Nix files unchanged; nothing to rebuild"
+fi
 #+end_src
 
 * Internet
@@ -5834,8 +5932,9 @@ SSH from the laptop (=ssh server.local=), with keys only. The name
 also announces itself.
 
 *Before the first switch* on the server, put the laptop's public key
-(=cat ~/.ssh/id_ed25519.pub= on the laptop) in =keys=. Without a key you
-can still log in at the server's own keyboard.
+(=cat ~/.ssh/id_ed25519.pub= on the laptop) in
+[[*The laptop's SSH key][The laptop's SSH key]]. Without a key you can still
+log in at the server's own keyboard.
 
 #+begin_src nix
 # GENERATED from config.org ("Home server / Reaching the server"). Do not edit; edit config.org.
@@ -5854,12 +5953,151 @@ can still log in at the server's own keyboard.
   };
 
   users.users.${username}.openssh.authorizedKeys.keys = [
-    # "ssh-ed25519 AAAA... mathijs@laptop"
+    "<<ssh-key-laptop>>"
   ];
 
   services.avahi.publish = {
     enable = true;
     addresses = true; # answer to server.local
+  };
+}
+#+end_src
+
+** Nightly updates: nix/server/updates.nix
+:PROPERTIES:
+:header-args:nix: :tangle nix/server/updates.nix
+:END:
+
+Two rules keep the laptop and the server from getting in each other's way.
+*Only the laptop writes*: it edits this file, updates =flake.lock= (the
+weekly job) and pushes; the server only pulls. So the server switches off
+the weekly job it gets from the core role. And *the server switches at
+night, not at the next boot*: the weekly job makes a new system the default
+for the next boot, which suits a laptop, but a server hardly ever reboots.
+
+Every night at 04:00 the server pulls what the laptop pushed, builds it,
+and switches to it at once; after a kernel update it also reboots.
+=journalctl -u server-update= shows what it did.
+
+#+begin_src nix
+# GENERATED from config.org ("Home server / Nightly updates"). Do not edit; edit config.org.
+# nix/server/updates.nix: nightly pull, build and switch; no weekly job here.
+{ config, lib, pkgs, username, hostName, ... }:
+
+let
+  update = pkgs.writeShellApplication {
+    name = "server-update";
+    runtimeInputs = [
+      pkgs.coreutils
+      pkgs.git
+      pkgs.util-linux # runuser
+      config.nix.package
+      config.systemd.package
+    ];
+    text = ''
+      user=${lib.escapeShellArg username}
+      home=${lib.escapeShellArg config.users.users.${username}.home}
+      repo=${lib.escapeShellArg "${config.users.users.${username}.home}/dotfiles"}
+      host=${lib.escapeShellArg hostName}
+    ''
+    + builtins.readFile ./server-update.sh;
+  };
+in
+{
+  # Only the laptop writes flake.lock.
+  systemd.services.dotfiles-update.enable = false;
+  systemd.timers.dotfiles-update.enable = false;
+
+  systemd.services.server-update = {
+    description = "Nightly: pull the dotfiles, build, switch; reboot for a new kernel";
+    wants = [ "network-online.target" ];
+    after = [ "network-online.target" ];
+    restartIfChanged = false; # never run as a side effect of a switch
+    startAt = "*-*-* 04:00:00";
+    serviceConfig.Type = "oneshot";
+    serviceConfig.ExecStart = lib.getExe update;
+  };
+  systemd.timers.server-update.timerConfig.Persistent = true;
+
+  environment.systemPackages = [ update ];
+}
+#+end_src
+
+*** The job: nix/server/server-update.sh
+
+#+begin_src sh :tangle nix/server/server-update.sh
+# GENERATED from config.org ("Home server / Nightly updates"). Do not edit; edit config.org.
+# server-update: run nightly by systemd, as root. Nix defines $user, $home,
+# $repo and $host before this text.
+as_user() { runuser -u "$user" -- env HOME="$home" "$@"; }
+
+# 1. What the laptop pushed. --ff-only: the server never makes commits.
+as_user git -C "$repo" pull --ff-only --quiet
+
+# 2. Build that commit, as you.
+system=$(as_user nix build --no-link --print-out-paths \
+  "$repo#nixosConfigurations.$host.config.system.build.toplevel")
+
+# 3. Switch now, if it differs from what runs.
+if [ "$(readlink -f /run/current-system)" != "$system" ]; then
+  nix-env --profile /nix/var/nix/profiles/system --set "$system"
+  "$system/bin/switch-to-configuration" switch
+  echo "server-update: switched to the new system"
+else
+  echo "server-update: already up to date"
+fi
+
+# 4. A new kernel only runs after a reboot.
+if [ "$(readlink -f /run/booted-system/kernel)" != "$(readlink -f /run/current-system/kernel)" ]; then
+  echo "server-update: new kernel; rebooting"
+  systemctl reboot
+fi
+#+end_src
+
+** COMMENT Health and backups: nix/server/health.nix
+:PROPERTIES:
+:header-args:nix: :tangle nix/server/health.nix
+:END:
+
+Not active yet: =COMMENT= in the heading makes Org skip this section when
+tangling. To switch it on, remove the word (=C-c ;= on the heading), save,
+commit, =deploy-server=.
+
+smartd watches every drive for early signs of failure; restic backs up the
+server's state and your home folder every night to the second WD drive,
+which stays NTFS with its contents: restic keeps its backup as ordinary
+files in one folder, =/srv/backup/restic=. Its password is a secret, so it
+lives in a file made once on the server, never here: =sudo mkdir -p
+/var/lib/secrets=, then a long random password in =/var/lib/secrets/restic=,
+readable only by root.
+
+#+begin_src nix
+# GENERATED from config.org ("Home server / Health and backups"). Do not edit; edit config.org.
+# nix/server/health.nix: drive health, and nightly backups to the second WD drive.
+{ username, ... }:
+
+{
+  services.smartd = {
+    enable = true; # watches every drive's health (smartctl -a /dev/sdX by hand)
+    autodetect = true;
+  };
+
+  # The second WD drive, kept as it is (NTFS, contents untouched); the
+  # backup goes in a folder of its own. Its label: lsblk -f.
+  fileSystems."/srv/backup" = {
+    device = "/dev/disk/by-label/WD20"; # change to the drive's own label
+    fsType = "ntfs3";
+    options = [ "nofail" "x-systemd.device-timeout=10s" ];
+  };
+
+  services.restic.backups.server = {
+    repository = "/srv/backup/restic";
+    passwordFile = "/var/lib/secrets/restic"; # made by hand; never in git
+    initialize = true;
+    paths = [ "/var/lib" "/home/${username}" ];
+    exclude = [ "/home/${username}/.cache" ];
+    timerConfig.OnCalendar = "03:00"; # before the nightly update at 04:00
+    pruneOpts = [ "--keep-daily 7" "--keep-weekly 5" "--keep-monthly 12" ];
   };
 }
 #+end_src

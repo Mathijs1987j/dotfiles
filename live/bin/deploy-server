@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+# GENERATED from config.org ("Desktop / Reaching the server"). Do not edit; edit config.org.
+# deploy-server [--force]: bring the server up to date with this repository.
+set -euo pipefail
+cd "$HOME/dotfiles"
+
+# The server always runs a commit.
+if [ -n "$(git status --porcelain -- flake.nix flake.lock nix live)" ]; then
+  echo "deploy-server: commit first; the server always runs a commit." >&2
+  exit 1
+fi
+
+# Live files: push, and let the server pull them. No rebuild.
+git push --quiet
+ssh server 'git -C ~/dotfiles pull --ff-only --quiet'
+echo "deploy-server: live files updated"
+
+# Nix files: build here, switch there; only when they changed.
+state="${XDG_STATE_HOME:-$HOME/.local/state}/dotfiles"
+now=$("$HOME/.local/bin/dotfiles-fingerprint")
+if [ "${1:-}" = --force ] || [ "$now" != "$(cat "$state/deployed-server" 2>/dev/null)" ]; then
+  nixos-rebuild switch --flake .#server --target-host server --sudo --ask-sudo-password
+  mkdir -p "$state"
+  echo "$now" > "$state/deployed-server"
+  echo "deploy-server: the server runs the new system"
+else
+  echo "deploy-server: Nix files unchanged; nothing to rebuild"
+fi

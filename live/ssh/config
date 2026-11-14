@@ -1,0 +1,8 @@
+# GENERATED from config.org ("Desktop / Reaching the server"). Do not edit; edit config.org.
+Host server
+    HostName server.local
+    User mathijs
+    # Reuse one connection for ten minutes (deploys open several).
+    ControlMaster auto
+    ControlPath ~/.ssh/cm-%r@%h:%p
+    ControlPersist 10m
