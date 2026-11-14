@@ -12,7 +12,7 @@
   # backup goes in a folder of its own. Its label: lsblk -f.
   
   services.restic.backups.server = {
-    repository = repository = "/srv/torrents/server-backup/restic";
+    repository = "/srv/torrents/server-backup/restic";
     passwordFile = "/var/lib/secrets/restic"; # made by hand; never in git
     initialize = true;
     paths = [ "/var/lib" "/home/${username}" ];
