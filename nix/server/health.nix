@@ -3,6 +3,7 @@
 { username, ... }:
 
 {
+  services.thermald.enable = true; # slows the processor down before it overheats
   services.smartd = {
     enable = true; # watches every drive's health (smartctl -a /dev/sdX by hand)
     autodetect = true;
