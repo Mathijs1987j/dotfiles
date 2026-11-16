@@ -1,6 +1,6 @@
 #+TITLE: Configuration: NixOS, Emacs and LaTeX
 #+AUTHOR: MJ
-#+DATE: 2026-11-15
+#+DATE: 2026-11-16
 #+STARTUP: overview
 #+PROPERTY: header-args :mkdirp yes :noweb yes :eval no
 #+PROPERTY: header-args:emacs-lisp :tangle live/emacs/config.el :eval yes
@@ -5370,15 +5370,15 @@ be next to the deck.
 
     <!-- Theme used for syntax highlighted code -->
     <link rel="stylesheet" href="dist/plugin/highlight/monokai.css" />
-
     <link rel="stylesheet" href="custom.css" />
+    <link rel="stylesheet" href="gametree.css" />
 
     <!-- JSXGraph: used for the implicit-circle and Taylor approximation slides -->
     <link
       rel="stylesheet"
-      href="https://cdn.jsdelivr.net/npm/jsxgraph/distrib/jsxgraph.css"
+      href="jsxgraph/jsxgraph.css"
     />
-    <script src="https://cdn.jsdelivr.net/npm/jsxgraph/distrib/jsxgraphcore.js"></script>
+    <script src="jsxgraph/jsxgraphcore.js"></script>
   </head>
   <body>
     <div class="reveal">
@@ -5392,6 +5392,8 @@ be next to the deck.
     <script src="dist/plugin/math.js"></script>
     <script src="dist/plugin/notes.js"></script>
     <script src="mj-notation.js"></script>
+    <script src="mj-overlays.js"></script>
+    <script src="gametree.js"></script>
     <script>
       Reveal.initialize({
         width: 1560,
