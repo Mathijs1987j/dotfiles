@@ -5401,7 +5401,7 @@ be next to the deck.
         hash: true,
 	transition: "convex",
         mathjax4: MJNotation.mathjax4(),
-        plugins: [ RevealMath.MathJax4, RevealNotes ],
+        plugins: [ RevealMath.MathJax4, RevealNotes, MJOverlays],
       });
     </script>
   </body>
