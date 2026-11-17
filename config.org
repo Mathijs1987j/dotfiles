@@ -1,6 +1,6 @@
 #+TITLE: Configuration: NixOS, Emacs and LaTeX
 #+AUTHOR: MJ
-#+DATE: 2026-11-15
+#+DATE: 2026-11-18
 #+STARTUP: overview
 #+PROPERTY: header-args :mkdirp yes :noweb yes :eval no
 #+PROPERTY: header-args:emacs-lisp :tangle live/emacs/config.el :eval yes
@@ -1403,6 +1403,33 @@ here.
 	helper = !gh auth git-credential
 #+end_src
 
+** Tailscale: nix/core/tailscale.nix
+:PROPERTIES:
+:header-args:nix: :tangle nix/core/tailscale.nix
+:END:
+
+Tailscale joins my devices into one private network (a tailnet), wherever
+they are: each reaches the others by name, through encrypted WireGuard
+tunnels, without any port opened on the modem. A machine joins once, with
+=sudo tailscale up= (the guide has the options for the first time), which
+prints a link to sign in; that login is state
+(=/var/lib/tailscale=). The list of machines, the DNS settings and who may
+reach what are kept in Tailscale's admin console, not here.
+
+#+begin_src nix
+# GENERATED from config.org ("Every machine / Tailscale"). Do not edit; edit config.org.
+# nix/core/tailscale.nix: Tailscale, the private network between my devices.
+{ lib, username, ... }:
+
+{
+  services.tailscale = {
+    enable = true;
+    openFirewall = true; # UDP 41641: lets devices reach each other directly
+    useRoutingFeatures = lib.mkDefault "client"; # may use an exit node
+    extraSetFlags = [ "--operator=${username}" ]; # `tailscale ...` without sudo
+  };
+}
+#+end_src
 * Desktop (role: desktop)
 
 Everything in =nix/desktop/= is part of the laptop and the USB stick, not
@@ -6244,6 +6271,33 @@ server.
 }
 #+end_src
 
+** Away from home: nix/server/tailscale.nix
+:PROPERTIES:
+:header-args:nix: :tangle nix/server/tailscale.nix
+:END:
+
+What only the server does on the tailnet. It is the tailnet's DNS server
+(AdGuard Home, set in the admin console under DNS), so it must not take
+its own DNS settings from Tailscale. It may also pass traffic on, which
+makes it usable as an exit node once the commented line is switched on
+and approved in the admin console. In the admin console its key expiry is
+disabled, so it never drops off the tailnet unattended.
+
+#+begin_src nix
+# GENERATED from config.org ("Home server / Away from home"). Do not edit; edit config.org.
+# nix/server/tailscale.nix: what only the server does on the tailnet.
+{ ... }:
+
+{
+  services.tailscale = {
+    useRoutingFeatures = "server"; # may pass traffic on (exit node)
+    extraSetFlags = [
+      "--accept-dns=false" # it is the DNS server: it must not ask itself
+      # "--advertise-exit-node" # offer the home connection to my devices
+    ];
+  };
+}
+#+end_src
 * State: what is not in this file
 
 Everything above can be rebuilt from this file. What follows cannot: it is
