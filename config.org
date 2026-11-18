@@ -2599,6 +2599,11 @@ ones.
 set -euo pipefail
 cd "$HOME/dotfiles"
 
+# One shared SSH connection for this deploy, so the sudo password is asked
+# once. Not in ~/.ssh/config: Nautilus hangs on a shared connection.
+cm=(-o ControlMaster=auto -o "ControlPath=$HOME/.ssh/cm-%r@%h:%p" -o ControlPersist=10m)
+export NIX_SSHOPTS="${cm[*]}"
+
 # The server always runs a commit.
 if [ -n "$(git status --porcelain -- flake.nix flake.lock nix live)" ]; then
   echo "deploy-server: commit first; the server always runs a commit." >&2
@@ -2607,7 +2612,7 @@ fi
 
 # Live files: push, and let the server pull them. No rebuild.
 git push --quiet
-ssh server 'git -C ~/dotfiles pull --ff-only --quiet'
+ssh "${cm[@]}" server 'git -C ~/dotfiles pull --ff-only --quiet'
 echo "deploy-server: live files updated"
 
 # Nix files: build here, switch there; only when they changed.
