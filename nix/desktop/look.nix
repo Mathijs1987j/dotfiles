@@ -15,6 +15,9 @@
     pkgs.nixos-artwork.wallpapers.catppuccin-mocha.gnomeFilePath;
 
   programs.dconf.enable = true;
+  # Qt programs (Shotcut, MuseScore) use the desktop's file picker, with
+  # Nautilus's bookmarks and Ctrl+L, instead of Qt's own simple dialog.
+  environment.sessionVariables.QT_QPA_PLATFORMTHEME = "xdgdesktopportal";
   programs.dconf.profiles.user.databases = [
     {
       settings."org/gnome/desktop/interface" = {
