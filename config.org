@@ -123,6 +123,19 @@ safe in git; the private half never leaves the laptop.
 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAINih+ZGH02hbjJeJwoQV0oYzQK8G/zgyMb/YHn6gmHZ+ mathijs@laptop
 #+end_src
 
+*** The laptop's Tailscale address
+
+The laptop's address on the tailnet (=tailscale ip -4= on the laptop). The
+server shares its drives with this address only (see
+[[*The drives on the laptop: nix/server/nfs.nix][The drives on the laptop]]).
+Tailscale keeps a machine's address for as long as the machine stays in the
+tailnet; after removing and re-adding the laptop, look it up again.
+
+#+NAME: laptop-tailscale-ip
+#+begin_src text
+100.111.254.123
+#+end_src
+
 *** Colours
 
 Catppuccin Mocha, as hexadecimal values without =#=, because programs write
@@ -2626,6 +2639,55 @@ if [ "${1:-}" = --force ] || [ "$now" != "$(cat "$state/deployed-server" 2>/dev/
 else
   echo "deploy-server: Nix files unchanged; nothing to rebuild"
 fi
+#+end_src
+
+** The server's drives: nix/desktop/server-drives.nix
+:PROPERTIES:
+:header-args:nix: :tangle nix/desktop/server-drives.nix
+:END:
+
+The server's =/srv= as the folder =/mnt/server=: =data=, =torrents=,
+=archive= and =scratch= (the server's half, and what each one is, is in
+[[*The drives on the laptop: nix/server/nfs.nix][The drives on the laptop]]). Every program sees it as an ordinary folder,
+at home and away, as long as Tailscale runs; Nautilus can keep it in its
+sidebar (open it, then =Ctrl+D=).
+
+It is connected the first time something opens the folder, not at boot,
+and let go after ten minutes without use, so a laptop away from the server
+starts and suspends as usual. When the server can't be reached, opening
+the folder fails after about 20 seconds, and a connection lost while
+working gives programs an error after half a minute or so (=soft=),
+instead of freezing them until it returns. The price of =soft=: a file
+being written at that moment may be incomplete; save it again.
+
+Away from home, the speed is that of the home connection's upload: fine
+for documents, music and films, slow for editing large videos (copy them
+first, or use Shotcut's proxies).
+
+#+begin_src nix
+# GENERATED from config.org ("Desktop / The server's drives"). Do not edit; edit config.org.
+# nix/desktop/server-drives.nix: the server's /srv at /mnt/server, over NFS.
+{ ... }:
+
+{
+  boot.supportedFilesystems.nfs = true; # the NFS client
+
+  fileSystems."/mnt/server" = {
+    device = "server:/"; # the server's /srv, by its Tailscale name
+    fsType = "nfs";
+    options = [
+      "nfsvers=4.2"
+      "noauto" # not at boot ...
+      "x-systemd.automount" # ... but the first time something opens it
+      "x-systemd.idle-timeout=10min" # let go when unused
+      "x-systemd.mount-timeout=20s" # give up when the server can't be reached
+      "_netdev" # it needs the network
+      "soft" # a lost connection gives an error instead of freezing programs
+      "timeo=50" # wait 5 s for an answer ...
+      "retrans=2" # ... and try twice more before giving up
+    ];
+  };
+}
 #+end_src
 
 * Internet
@@ -6228,8 +6290,8 @@ device, in Tailscale's console, or by letting it hand out addresses
 :END:
 
 My films, series and music are plain folders on the two WD drives, which I
-open over SFTP from Nautilus and play in mpv, at home and (through
-Tailscale) away. The 18 TB drive is mounted here; the 20 TB drive is
+open from =/mnt/server= on the laptop (see [[*The drives on the laptop: nix/server/nfs.nix][The drives on the laptop]]) or over
+SFTP, and play in mpv, at home and (through Tailscale) away. The 18 TB drive is mounted here; the 20 TB drive is
 mounted in "Torrents".
 
 A friend can download selected files: =/srv/share= holds links to them, and
@@ -6276,6 +6338,83 @@ server.
   # Reachable only through Tailscale, never from the home network or the
   # internet.
   networking.firewall.interfaces.tailscale0.allowedTCPPorts = [ 8090 ];
+}
+#+end_src
+
+** The drives on the laptop: nix/server/nfs.nix
+:PROPERTIES:
+:header-args:nix: :tangle nix/server/nfs.nix
+:END:
+
+The server's =/srv=, with every drive in it, appears on the laptop as the
+folder =/mnt/server=, for every program: Shotcut's file dialog, the
+terminal, mpv. The laptop's half is in [[*The server's drives: nix/desktop/server-drives.nix][The server's drives]].
+
+| On the server   | On the laptop             | What                                   |
+|-----------------+---------------------------+----------------------------------------|
+| =/srv/data=     | =/mnt/server/data=        | the second internal NVMe drive (ext4)  |
+| =/srv/torrents= | =/mnt/server/torrents=    | WD 20 TB (NTFS)                        |
+| =/srv/archive=  | =/mnt/server/archive=     | WD 18 TB (NTFS)                        |
+| =/srv/scratch=  | =/mnt/server/scratch=     | spare room on the system drive (NVMe)  |
+
+It uses NFS, Linux's own way of sharing folders: faster than SFTP, which
+matters for video editing. NFS itself checks no password; it trusts the
+address a request comes from. So the share is reachable only through
+Tailscale (its port, 2049, is opened on the =tailscale0= interface only),
+and only from the laptop's Tailscale address ([[*The laptop's Tailscale address][The laptop's Tailscale address]]).
+Tailscale encrypts the traffic, at home as well as away. SFTP stays for
+everything else: rsync, the phone and the tablet, Windows.
+
+- *Everything the laptop writes belongs to you* (=all_squash= with your
+  account's numbers), whichever account on the laptop wrote it.
+- *An unplugged drive is never filled by mistake.* Each drive is shared
+  only while it is mounted (=mp=); without it, its folder on the laptop is
+  empty and refuses new files, instead of filling the system drive.
+- *The data drive's top folder is yours*, so you can make folders in it
+  (it belonged to root after formatting). Files already in it keep their
+  owner.
+- *=/srv/scratch=* is spare room on the system drive: the fastest storage
+  in the server, for work in progress (video projects, Shotcut's proxies).
+  Keep ~100 GB free there for the system (=ssh server df -h /=), and keep
+  nothing there that exists nowhere else: reinstalling the server may wipe
+  that drive.
+- On NTFS drives, Linux permissions don't stick: =chmod= and =chown= fail,
+  and =rsync -a= warns about them. The files themselves copy fine.
+
+#+begin_src nix
+# GENERATED from config.org ("Home server / The drives on the laptop"). Do not edit; edit config.org.
+# nix/server/nfs.nix: /srv shared with the laptop over NFS, through Tailscale only.
+{ username, ... }:
+
+{
+  # /srv is the root the laptop mounts (fsid=0); the drives in it are
+  # shared too, each only while it is mounted (mp). Only the laptop's
+  # Tailscale address may connect; whatever it writes belongs to you
+  # (all_squash with your account's numbers, 1000 and the users group).
+  services.nfs.server = {
+    enable = true;
+    exports = ''
+      /srv          <<laptop-tailscale-ip>>(rw,fsid=0,crossmnt,no_subtree_check,all_squash,anonuid=1000,anongid=100)
+      /srv/data     <<laptop-tailscale-ip>>(rw,mp,fsid=1,no_subtree_check,all_squash,anonuid=1000,anongid=100)
+      /srv/torrents <<laptop-tailscale-ip>>(rw,mp,fsid=2,no_subtree_check,all_squash,anonuid=1000,anongid=100)
+      /srv/archive  <<laptop-tailscale-ip>>(rw,mp,fsid=3,no_subtree_check,all_squash,anonuid=1000,anongid=100)
+    '';
+  };
+
+  # Share the drives only after they have been mounted (or given up on).
+  systemd.services.nfs-server.after = [
+    "srv-data.mount"
+    "srv-torrents.mount"
+    "srv-archive.mount"
+  ];
+
+  # NFS version 4 needs this one port; only through Tailscale.
+  networking.firewall.interfaces.tailscale0.allowedTCPPorts = [ 2049 ];
+
+  systemd.tmpfiles.rules = [
+    "z /srv/data 0755 ${username} users -" # the data drive's top folder is yours
+    "d /srv/scratch 0755 ${username} users -" # spare room on the system drive
+  ];
 }
 #+end_src
 
