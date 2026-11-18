@@ -1,8 +1,9 @@
 # GENERATED from config.org ("Desktop / Reaching the server"). Do not edit; edit config.org.
+# With Tailscale running, reach the server by its Tailscale name, which
+# works at home and away; otherwise by its name on the home network.
+Match originalhost server exec "tailscale status > /dev/null 2>&1"
+    HostName server
+
 Host server
     HostName server.local
     User mathijs
-    # Reuse one connection for ten minutes (deploys open several).
-    ControlMaster auto
-    ControlPath ~/.ssh/cm-%r@%h:%p
-    ControlPersist 10m
