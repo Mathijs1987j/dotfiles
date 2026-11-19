@@ -6091,7 +6091,9 @@ Other captures, in other frames, behave as usual.
 *The count for the bar: live/bin/todo-count.* It prints one line of JSON
 for Waybar, like [[*Failed services: live/bin/failed-units][failed-units]], and the bar runs it straight from the
 repository, so a change here needs no rebuild. A topic's tags are left out
-of its name in the tooltip.
+of its name in the tooltip. A file that came from Windows ends every line
+with a carriage return; the script drops it, because inside the JSON it
+makes Waybar reject the line and hide the item.
 
 #+begin_src sh :tangle live/bin/todo-count :tangle-mode o755
 #!/usr/bin/env bash
@@ -6111,6 +6113,7 @@ awk '
     gsub(/"/, "\\&quot;", s)
     return s
   }
+  { sub(/\r$/, "") } # Windows line endings: drop the carriage return
   /^\* / {
     topic = substr($0, 3)
     sub(/[ \t]+:[[:alnum:]_@#%:]+:[ \t]*$/, "", topic) # tags
