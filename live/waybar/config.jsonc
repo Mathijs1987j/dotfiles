@@ -4,9 +4,17 @@
   "position": "top",
   "height": 28,
   "reload_style_on_change": true,
+  "expand-left": true, // the left group fills the space up to the clock
 
   // Workspaces only, no window titles or task list.
-  "modules-left": ["niri/workspaces"],
+  // The to-do count halfway between the workspaces and the clock: two
+  // stretching spacers around it share the space equally.
+  "modules-left": [
+    "niri/workspaces",
+    "custom/spacer#left",
+    "custom/todo",
+    "custom/spacer#right"
+  ],
   "modules-center": ["clock"],
   "modules-right": [
     "custom/dotfiles",
@@ -28,6 +36,23 @@
   "clock": {
     "format": "{:%a %d %b  %H:%M}",
     "tooltip-format": "<tt>{calendar}</tt>"
+  },
+
+  // Open to-dos in ~/Documents/ToDo/ToDo.org (config.org: Emacs / To-do
+  // list); hover for the count per topic. Click to open the list, right-click
+  // to add a to-do. Hidden when there are none.
+  // Empty spacers that take up the leftover space (a space as text, because
+  // an empty text would hide them).
+  "custom/spacer#left": { "format": " ", "expand": true, "tooltip": false },
+  "custom/spacer#right": { "format": " ", "expand": true, "tooltip": false },
+
+  "custom/todo": {
+    "exec": "$HOME/dotfiles/live/bin/todo-count",
+    "return-type": "json",
+    "interval": 60,
+    "signal": 9, // pkill -RTMIN+9 waybar: count now (Emacs does, on saving the list)
+    "on-click": "emacsclient -n -c ~/Documents/ToDo/ToDo.org",
+    "on-click-right": "emacsclient -n -c -F '((name . \"todo-capture\"))' -e '(org-capture nil \"t\")'"
   },
 
   // "rebuild" when the Nix files changed since the last rebuild (click to

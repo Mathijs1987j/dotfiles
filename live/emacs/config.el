@@ -444,6 +444,77 @@ With a prefix argument, DELETE the item instead of saving it to the kill ring."
   (org-re-reveal-root ".")
   (org-re-reveal-revealjs-version "4"))
 
+(setq org-todo-keywords '((sequence "TODO" "|" "DONE" "CANCELLED"))
+      org-log-done 'time)
+
+(defun MJ-org-archive-done ()
+  "Archive every level-2 DONE or CANCELLED entry of this Org file.
+Each goes to NAME-archive.org next to this file, under a level-1 heading
+named after its topic (its level-1 heading here). Both files are saved."
+  (interactive)
+  (unless (derived-mode-p 'org-mode)
+    (user-error "Not in an Org file"))
+  (let* ((file (or buffer-file-name (user-error "This buffer has no file")))
+         (archive (concat (file-name-sans-extension file) "-archive.org"))
+         (count 0))
+    (org-map-entries
+     (lambda ()
+       (let* ((topic (or (car (org-get-outline-path)) "No topic"))
+              ;; Org passes both parts through `format': protect any %.
+              (org-archive-location
+               (concat (string-replace "%" "%%" archive)
+                       "::* " (string-replace "%" "%%" topic))))
+         (org-archive-subtree)
+         (setq count (1+ count))
+         ;; The entry is gone: continue from what now stands in its place.
+         (setq org-map-continue-from (line-beginning-position))))
+     "LEVEL=2/DONE|CANCELLED" 'file)
+    (when (> count 0)
+      (save-buffer))
+    (message "Archived %d to-do%s to %s" count (if (= count 1) "" "s")
+             (file-name-nondirectory archive))))
+
+(defconst MJ-todo-file (expand-file-name "~/Documents/ToDo/ToDo.org")
+  "The to-do list (state: not in the repository).")
+
+(unless MJ-windows-p
+  (setq org-capture-templates
+        `(("t" "To-do" entry (file+headline ,MJ-todo-file "Inbox")
+           "* TODO %?")))
+
+  (defun MJ-open-todo-file ()
+    "Open the to-do list."
+    (interactive)
+    (find-file MJ-todo-file))
+
+  (global-set-key (kbd "C-c c") #'org-capture)
+  (global-set-key (kbd "C-c t") #'MJ-open-todo-file)
+
+  (defun MJ--todo-capture-frame-p ()
+    "Non-nil in the frame that Mod+A and the bar open for a new to-do."
+    (equal (frame-parameter nil 'name) "todo-capture"))
+
+  (defun MJ--todo-capture-fill-frame ()
+    "In the to-do frame, show only the capture."
+    (when (MJ--todo-capture-frame-p)
+      (delete-other-windows)))
+
+  (defun MJ--todo-capture-close-frame ()
+    "Close the to-do frame once the capture is filed or cancelled."
+    (when (MJ--todo-capture-frame-p)
+      (delete-frame)))
+
+  (add-hook 'org-capture-mode-hook #'MJ--todo-capture-fill-frame)
+  (add-hook 'org-capture-after-finalize-hook #'MJ--todo-capture-close-frame)
+
+  (defun MJ--todo-tell-bar ()
+    "After the to-do list is saved, let the bar count again (signal 9)."
+    (when (and buffer-file-name
+               (file-equal-p buffer-file-name MJ-todo-file))
+      (call-process "pkill" nil 0 nil "-RTMIN+9" "waybar")))
+
+  (add-hook 'after-save-hook #'MJ--todo-tell-bar))
+
 (unless MJ-windows-p
   (use-package eat
     :commands eat))

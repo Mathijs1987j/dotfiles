@@ -92,6 +92,15 @@ window-rule {
     match app-id="com.saivert.pwvucontrol"
     open-floating true
 }
+
+// The frame for a new to-do (Mod+A, or a right click on the bar's to-do
+// item); emacsclient -F gives it this title.
+window-rule {
+    match app-id=r#"(?i)^emacs$"# title="^todo-capture$"
+    open-floating true
+    default-column-width { proportion 0.4; }
+    default-window-height { proportion 0.3; }
+}
 window-rule {
     geometry-corner-radius 6
     clip-to-geometry true
@@ -111,6 +120,8 @@ binds {
     Mod+Shift+T hotkey-overlay-title="Terminal: foot" { spawn "foot"; }
     Mod+D hotkey-overlay-title="Launcher: fuzzel" { spawn "fuzzel"; }
     Mod+E hotkey-overlay-title="Emacs (client frame)" { spawn "emacsclient" "-c"; }
+    // Mod+A: add a to-do in a small floating Emacs frame (see To-do list).
+    Mod+A hotkey-overlay-title="Add a to-do" { spawn "emacsclient" "-n" "-c" "-F" r#"((name . "todo-capture"))"# "-e" r#"(org-capture nil "t")"#; }
     // Mod+B: go to the browser, starting it if needed (it opens on "web").
     Mod+B hotkey-overlay-title="Browser (focus or start)" { spawn "run-or-raise" "librewolf" "librewolf"; }
     Mod+Shift+B hotkey-overlay-title="New browser window" { spawn "librewolf" "--new-window"; }

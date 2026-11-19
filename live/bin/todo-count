@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+# GENERATED from config.org ("Emacs / To-do list"). Do not edit; edit config.org.
+# todo-count: one line of JSON for Waybar's custom/todo: the number of open
+# to-dos (level-2 headings with the keyword TODO) in ToDo.org, and the count
+# per topic for the tooltip; empty (the item hidden) when there are none.
+file="$HOME/Documents/ToDo/ToDo.org"
+if [ ! -f "$file" ]; then
+  echo '{"text": ""}'
+  exit 0
+fi
+awk '
+  # Make a topic name safe inside JSON and Pango markup (the tooltip).
+  function esc(s) {
+    gsub(/&/, "\\&amp;", s); gsub(/</, "\\&lt;", s); gsub(/>/, "\\&gt;", s)
+    gsub(/"/, "\\&quot;", s)
+    return s
+  }
+  /^\* / {
+    topic = substr($0, 3)
+    sub(/[ \t]+:[[:alnum:]_@#%:]+:[ \t]*$/, "", topic) # tags
+    next
+  }
+  /^\*\* TODO([ \t]|$)/ {
+    if (!(topic in n)) order[++k] = topic
+    n[topic]++
+    total++
+  }
+  END {
+    if (!total) { print "{\"text\": \"\"}"; exit }
+    tip = ""
+    for (i = 1; i <= k; i++)
+      tip = tip (i > 1 ? "\\n" : "") esc(order[i]) ": " n[order[i]]
+    printf "{\"text\": \"todo %d\", \"tooltip\": \"%s\"}\n", total, tip
+  }
+' "$file"

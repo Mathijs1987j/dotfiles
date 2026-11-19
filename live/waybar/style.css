@@ -5,7 +5,8 @@ window#waybar { background: alpha(#1e1e2e, 0.92); color: #cdd6f4; }
 #workspaces button.active { color: #89b4fa; border-bottom: 2px solid #89b4fa; }
 #clock, #cpu, #memory, #disk, #temperature, #pulseaudio, #backlight,
 #battery, #power-profiles-daemon, #tray,
-#custom-dotfiles, #custom-failed { padding: 0 9px; }
+#custom-dotfiles, #custom-failed, #custom-todo { padding: 0 9px; }
+#custom-todo { color: #94e2d5; }
 #cpu, #memory, #disk, #temperature { color: #a6adc8; }
 #temperature.critical, #battery.critical, #custom-failed { color: #f38ba8; }
 #battery.warning, #custom-dotfiles { color: #f9e2af; }
