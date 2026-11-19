@@ -5979,11 +5979,11 @@ the repository (see [[*State: what is not in this file][State]]). This section i
    closes; =C-c C-k= cancels. Inside Emacs it is =C-c c t=. The first time,
    Org makes the =Inbox= heading at the end of the file; move it to the top
    if you like, as the capture finds it anywhere.
-2. *Seeing.* The bar shows =todo 14= halfway between the workspaces and the
-   clock: the open to-dos,
-   meaning level-2 headings with the keyword =TODO=. Hovering shows the
-   count per topic. =DONE=, =CANCELLED= and level-2 headings without a
-   keyword (notes) do not count. A click opens the list in a new frame;
+2. *Seeing.* The bar shows a checklist icon and a number (say 14) halfway
+   between the workspaces and the clock: the open to-dos, meaning level-2
+   headings with the keyword =TODO=. Hovering shows the count per topic.
+   =DONE=, =CANCELLED= and level-2 headings without a keyword (notes) do
+   not count. A click opens the list in a new frame;
    =C-c t= opens it inside Emacs. The bar counts every minute, and at once
    when Emacs saves the list (Waybar signal 9, as signal 8 is for the
    rebuild status). With no open to-dos the item disappears.
@@ -6129,7 +6129,8 @@ awk '
     tip = ""
     for (i = 1; i <= k; i++)
       tip = tip (i > 1 ? "\\n" : "") esc(order[i]) ": " n[order[i]]
-    printf "{\"text\": \"todo %d\", \"tooltip\": \"%s\"}\n", total, tip
+    # \uf0ae: the checklist icon of the Nerd Font (Font Awesome "tasks")
+    printf "{\"text\": \"\\uf0ae %d\", \"tooltip\": \"%s\"}\n", total, tip
   }
 ' "$file"
 #+end_src
