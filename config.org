@@ -1,6 +1,6 @@
 #+TITLE: Configuration: NixOS, Emacs and LaTeX
 #+AUTHOR: MJ
-#+DATE: 2026-11-19
+#+DATE: 2026-11-20
 #+STARTUP: overview
 #+PROPERTY: header-args :mkdirp yes :noweb yes :eval no
 #+PROPERTY: header-args:emacs-lisp :tangle live/emacs/config.el :eval yes
