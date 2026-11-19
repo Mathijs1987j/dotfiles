@@ -1,6 +1,6 @@
 #+TITLE: Configuration: NixOS, Emacs and LaTeX
 #+AUTHOR: MJ
-#+DATE: 2026-11-18
+#+DATE: 2026-11-19
 #+STARTUP: overview
 #+PROPERTY: header-args :mkdirp yes :noweb yes :eval no
 #+PROPERTY: header-args:emacs-lisp :tangle live/emacs/config.el :eval yes
@@ -3935,6 +3935,7 @@ MuseScore and Shotcut have their own dark themes in their settings.
     yt-dlp # downloads; also used by mpv for links
     musescore
     shotcut
+    pinta # paint-like
   ];
 }
 #+end_src

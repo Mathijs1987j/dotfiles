@@ -9,5 +9,6 @@
     yt-dlp # downloads; also used by mpv for links
     musescore
     shotcut
+    pinta # paint-like
   ];
 }
