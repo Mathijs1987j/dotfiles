@@ -15,6 +15,7 @@ awk '
     gsub(/"/, "\\&quot;", s)
     return s
   }
+  { sub(/\r$/, "") } # Windows line endings: drop the carriage return
   /^\* / {
     topic = substr($0, 3)
     sub(/[ \t]+:[[:alnum:]_@#%:]+:[ \t]*$/, "", topic) # tags
