@@ -1681,6 +1681,8 @@ WhatsApp Web, Thunderbird) to "chat". A rule applies when a window opens; it
 matches the window's /app id/, which =niri msg windows= shows. WhatsApp Web
 gets its own app id, =whatsapp=, from the =whatsapp-web= launcher (see
 [[*WhatsApp Web: nix/desktop/whatsapp.nix][WhatsApp Web]]); that keeps it apart from ordinary LibreWolf windows.
+The small Emacs frame for a new to-do (=Mod+A=) floats in the middle; it is
+recognised by its title (see [[*To-do list: nix/desktop/todo.nix][To-do list]]).
 
 #+begin_src kdl
 // Where windows open. Find an app's id with `niri msg windows` while it runs.
@@ -1704,6 +1706,15 @@ window-rule {
 window-rule {
     match app-id="com.saivert.pwvucontrol"
     open-floating true
+}
+
+// The frame for a new to-do (Mod+A, or a right click on the bar's to-do
+// item); emacsclient -F gives it this title.
+window-rule {
+    match app-id=r#"(?i)^emacs$"# title="^todo-capture$"
+    open-floating true
+    default-column-width { proportion 0.4; }
+    default-window-height { proportion 0.3; }
 }
 window-rule {
     geometry-corner-radius 6
@@ -1732,6 +1743,8 @@ binds {
     Mod+Shift+T hotkey-overlay-title="Terminal: foot" { spawn "foot"; }
     Mod+D hotkey-overlay-title="Launcher: fuzzel" { spawn "fuzzel"; }
     Mod+E hotkey-overlay-title="Emacs (client frame)" { spawn "emacsclient" "-c"; }
+    // Mod+A: add a to-do in a small floating Emacs frame (see To-do list).
+    Mod+A hotkey-overlay-title="Add a to-do" { spawn "emacsclient" "-n" "-c" "-F" r#"((name . "todo-capture"))"# "-e" r#"(org-capture nil "t")"#; }
     // Mod+B: go to the browser, starting it if needed (it opens on "web").
     Mod+B hotkey-overlay-title="Browser (focus or start)" { spawn "run-or-raise" "librewolf" "librewolf"; }
     Mod+Shift+B hotkey-overlay-title="New browser window" { spawn "librewolf" "--new-window"; }
@@ -1974,7 +1987,13 @@ order, how they look) and =style.css= (colours and spacing).
 - =style.css= changes apply at once (=reload_style_on_change=).
 - =config.jsonc= changes apply after =systemctl --user restart waybar=.
 
-On the left the workspaces, in the middle the clock, on the right two
+On the left the workspaces, in the middle the clock, and halfway between
+them the number of open to-dos (see [[*To-do list: nix/desktop/todo.nix][To-do list]]). That needs a small
+trick, because Waybar only knows left, centre and right: the left group
+fills all the space up to the clock (=expand-left=), and in it two empty
+spacers, one on each side of the to-do item, share that space equally
+(=expand=). The clock stays exactly in the centre, and only the to-do text
+itself reacts to the mouse. On the right two
 status items that are hidden when there is nothing to say (the
 configuration's status from [[*Rebuild status][Rebuild status]], and failed services, such as
 a failed weekly update), then system information and the tray.
@@ -2041,9 +2060,17 @@ shows a strange value, pick the processor's sensor (=thermal-zone= or
   "position": "top",
   "height": 28,
   "reload_style_on_change": true,
+  "expand-left": true, // the left group fills the space up to the clock
 
   // Workspaces only, no window titles or task list.
-  "modules-left": ["niri/workspaces"],
+  // The to-do count halfway between the workspaces and the clock: two
+  // stretching spacers around it share the space equally.
+  "modules-left": [
+    "niri/workspaces",
+    "custom/spacer#left",
+    "custom/todo",
+    "custom/spacer#right"
+  ],
   "modules-center": ["clock"],
   "modules-right": [
     "custom/dotfiles",
@@ -2065,6 +2092,23 @@ shows a strange value, pick the processor's sensor (=thermal-zone= or
   "clock": {
     "format": "{:%a %d %b  %H:%M}",
     "tooltip-format": "<tt>{calendar}</tt>"
+  },
+
+  // Open to-dos in ~/Documents/ToDo/ToDo.org (config.org: Emacs / To-do
+  // list); hover for the count per topic. Click to open the list, right-click
+  // to add a to-do. Hidden when there are none.
+  // Empty spacers that take up the leftover space (a space as text, because
+  // an empty text would hide them).
+  "custom/spacer#left": { "format": " ", "expand": true, "tooltip": false },
+  "custom/spacer#right": { "format": " ", "expand": true, "tooltip": false },
+
+  "custom/todo": {
+    "exec": "$HOME/dotfiles/live/bin/todo-count",
+    "return-type": "json",
+    "interval": 60,
+    "signal": 9, // pkill -RTMIN+9 waybar: count now (Emacs does, on saving the list)
+    "on-click": "emacsclient -n -c ~/Documents/ToDo/ToDo.org",
+    "on-click-right": "emacsclient -n -c -F '((name . \"todo-capture\"))' -e '(org-capture nil \"t\")'"
   },
 
   // "rebuild" when the Nix files changed since the last rebuild (click to
@@ -2169,7 +2213,8 @@ window#waybar { background: alpha(#<<base>>, 0.92); color: #<<text>>; }
 #workspaces button.active { color: #<<blue>>; border-bottom: 2px solid #<<blue>>; }
 #clock, #cpu, #memory, #disk, #temperature, #pulseaudio, #backlight,
 #battery, #power-profiles-daemon, #tray,
-#custom-dotfiles, #custom-failed { padding: 0 9px; }
+#custom-dotfiles, #custom-failed, #custom-todo { padding: 0 9px; }
+#custom-todo { color: #<<teal>>; }
 #cpu, #memory, #disk, #temperature { color: #<<subtext>>; }
 #temperature.critical, #battery.critical, #custom-failed { color: #<<red>>; }
 #battery.warning, #custom-dotfiles { color: #<<yellow>>; }
@@ -5913,6 +5958,222 @@ of the exported file.
   :custom
   (org-re-reveal-root ".")
   (org-re-reveal-revealjs-version "4"))
+#+end_src
+
+** To-do list: nix/desktop/todo.nix
+:PROPERTIES:
+:header-args:nix: :tangle nix/desktop/todo.nix
+:END:
+
+The to-do list is one Org file, =~/Documents/ToDo/ToDo.org=: a level-1
+heading per topic, and under it the to-dos as level-2 headings with the
+keyword =TODO=. Almost none have a date, so the Org agenda and reminders at
+a set time have nothing to work with (appointments live in the online
+calendars). A list without dates only works if adding to it costs nothing
+and if it stays in sight. The file itself is /state/: personal, and not in
+the repository (see [[*State: what is not in this file][State]]). This section is what surrounds it.
+
+1. *Adding.* =Mod+A= anywhere, or a right click on the bar's to-do item,
+   opens a small floating Emacs frame with a new =TODO= heading. Type it;
+   =C-c C-c= files it under the topic =Inbox= and saves, and the frame
+   closes; =C-c C-k= cancels. Inside Emacs it is =C-c c t=. The first time,
+   Org makes the =Inbox= heading at the end of the file; move it to the top
+   if you like, as the capture finds it anywhere.
+2. *Seeing.* The bar shows =todo 14= halfway between the workspaces and the
+   clock: the open to-dos,
+   meaning level-2 headings with the keyword =TODO=. Hovering shows the
+   count per topic. =DONE=, =CANCELLED= and level-2 headings without a
+   keyword (notes) do not count. A click opens the list in a new frame;
+   =C-c t= opens it inside Emacs. The bar counts every minute, and at once
+   when Emacs saves the list (Waybar signal 9, as signal 8 is for the
+   rebuild status). With no open to-dos the item disappears.
+3. *Reviewing.* On Sunday at 19:00 a notification asks for the weekly
+   review: sort the =Inbox= into topics, mark what is finished and archive
+   it. It stays until you click it (which opens the list) or dismiss it
+   (=Mod+N=). If the laptop was off or asleep at that moment, it comes at
+   the next login or wake-up. The time is the =OnCalendar= line in the Nix
+   block below (a rebuild).
+4. *Archiving.* =M-x MJ-org-archive-done= moves every level-2 to-do that is
+   =DONE= or =CANCELLED= to =ToDo-archive.org= next to the list, under a
+   heading with the same topic name, and saves both files. Org adds the
+   archiving date and the original place as properties. A finished
+   sub-step (level 3) of a to-do that is still open stays where it is. The
+   command works in any Org file; the archive is always =NAME-archive.org=
+   next to it.
+
+=C-c C-t= on a heading cycles =TODO= → =DONE= → =CANCELLED= → no keyword;
+=S-<right>= does the same. Marking a to-do =DONE= adds a =CLOSED:= date
+(=org-log-done=). A =#+TODO:= line in an Org file replaces these keywords
+for that file only.
+
+#+begin_src emacs-lisp
+(setq org-todo-keywords '((sequence "TODO" "|" "DONE" "CANCELLED"))
+      org-log-done 'time)
+
+(defun MJ-org-archive-done ()
+  "Archive every level-2 DONE or CANCELLED entry of this Org file.
+Each goes to NAME-archive.org next to this file, under a level-1 heading
+named after its topic (its level-1 heading here). Both files are saved."
+  (interactive)
+  (unless (derived-mode-p 'org-mode)
+    (user-error "Not in an Org file"))
+  (let* ((file (or buffer-file-name (user-error "This buffer has no file")))
+         (archive (concat (file-name-sans-extension file) "-archive.org"))
+         (count 0))
+    (org-map-entries
+     (lambda ()
+       (let* ((topic (or (car (org-get-outline-path)) "No topic"))
+              ;; Org passes both parts through `format': protect any %.
+              (org-archive-location
+               (concat (string-replace "%" "%%" archive)
+                       "::* " (string-replace "%" "%%" topic))))
+         (org-archive-subtree)
+         (setq count (1+ count))
+         ;; The entry is gone: continue from what now stands in its place.
+         (setq org-map-continue-from (line-beginning-position))))
+     "LEVEL=2/DONE|CANCELLED" 'file)
+    (when (> count 0)
+      (save-buffer))
+    (message "Archived %d to-do%s to %s" count (if (= count 1) "" "s")
+             (file-name-nondirectory archive))))
+#+end_src
+
+*[NixOS]* The list exists on the laptop only. The capture frame is an
+ordinary =emacsclient= frame whose name, =todo-capture=, becomes the
+window title. niri recognises the frame by that title and lets it float
+(see [[*Where windows open][Where windows open]]). Emacs uses it to show only the capture in the
+frame and to close the frame when the capture ends, filed or cancelled.
+Other captures, in other frames, behave as usual.
+
+#+begin_src emacs-lisp
+(defconst MJ-todo-file (expand-file-name "~/Documents/ToDo/ToDo.org")
+  "The to-do list (state: not in the repository).")
+
+(unless MJ-windows-p
+  (setq org-capture-templates
+        `(("t" "To-do" entry (file+headline ,MJ-todo-file "Inbox")
+           "* TODO %?")))
+
+  (defun MJ-open-todo-file ()
+    "Open the to-do list."
+    (interactive)
+    (find-file MJ-todo-file))
+
+  (global-set-key (kbd "C-c c") #'org-capture)
+  (global-set-key (kbd "C-c t") #'MJ-open-todo-file)
+
+  (defun MJ--todo-capture-frame-p ()
+    "Non-nil in the frame that Mod+A and the bar open for a new to-do."
+    (equal (frame-parameter nil 'name) "todo-capture"))
+
+  (defun MJ--todo-capture-fill-frame ()
+    "In the to-do frame, show only the capture."
+    (when (MJ--todo-capture-frame-p)
+      (delete-other-windows)))
+
+  (defun MJ--todo-capture-close-frame ()
+    "Close the to-do frame once the capture is filed or cancelled."
+    (when (MJ--todo-capture-frame-p)
+      (delete-frame)))
+
+  (add-hook 'org-capture-mode-hook #'MJ--todo-capture-fill-frame)
+  (add-hook 'org-capture-after-finalize-hook #'MJ--todo-capture-close-frame)
+
+  (defun MJ--todo-tell-bar ()
+    "After the to-do list is saved, let the bar count again (signal 9)."
+    (when (and buffer-file-name
+               (file-equal-p buffer-file-name MJ-todo-file))
+      (call-process "pkill" nil 0 nil "-RTMIN+9" "waybar")))
+
+  (add-hook 'after-save-hook #'MJ--todo-tell-bar))
+#+end_src
+
+*The count for the bar: live/bin/todo-count.* It prints one line of JSON
+for Waybar, like [[*Failed services: live/bin/failed-units][failed-units]], and the bar runs it straight from the
+repository, so a change here needs no rebuild. A topic's tags are left out
+of its name in the tooltip.
+
+#+begin_src sh :tangle live/bin/todo-count :tangle-mode o755
+#!/usr/bin/env bash
+# GENERATED from config.org ("Emacs / To-do list"). Do not edit; edit config.org.
+# todo-count: one line of JSON for Waybar's custom/todo: the number of open
+# to-dos (level-2 headings with the keyword TODO) in ToDo.org, and the count
+# per topic for the tooltip; empty (the item hidden) when there are none.
+file="$HOME/Documents/ToDo/ToDo.org"
+if [ ! -f "$file" ]; then
+  echo '{"text": ""}'
+  exit 0
+fi
+awk '
+  # Make a topic name safe inside JSON and Pango markup (the tooltip).
+  function esc(s) {
+    gsub(/&/, "\\&amp;", s); gsub(/</, "\\&lt;", s); gsub(/>/, "\\&gt;", s)
+    gsub(/"/, "\\&quot;", s)
+    return s
+  }
+  /^\* / {
+    topic = substr($0, 3)
+    sub(/[ \t]+:[[:alnum:]_@#%:]+:[ \t]*$/, "", topic) # tags
+    next
+  }
+  /^\*\* TODO([ \t]|$)/ {
+    if (!(topic in n)) order[++k] = topic
+    n[topic]++
+    total++
+  }
+  END {
+    if (!total) { print "{\"text\": \"\"}"; exit }
+    tip = ""
+    for (i = 1; i <= k; i++)
+      tip = tip (i > 1 ? "\\n" : "") esc(order[i]) ": " n[order[i]]
+    printf "{\"text\": \"todo %d\", \"tooltip\": \"%s\"}\n", total, tip
+  }
+' "$file"
+#+end_src
+
+*The weekly reminder.* A user service sends the notification and a timer
+starts it. The timer runs only while you are logged in, because a
+notification needs the desktop. =Persistent= catches up on a Sunday evening
+that was missed. A click on the notification opens the list. The service
+quietly does nothing on a machine without the list (the USB stick).
+=systemctl --user start todo-review= shows it now.
+
+#+begin_src nix
+# GENERATED from config.org ("Emacs / To-do list"). Do not edit; edit config.org.
+# nix/desktop/todo.nix: the weekly reminder to review the to-do list.
+{ config, pkgs, ... }:
+
+{
+  systemd.user.services.todo-review = {
+    description = "Reminder to review the to-do list";
+    path = [
+      pkgs.libnotify # notify-send
+      config.services.emacs.package # emacsclient, for the click
+    ];
+    serviceConfig.Type = "oneshot";
+    script = ''
+      file="$HOME/Documents/ToDo/ToDo.org"
+      [ -f "$file" ] || exit 0
+      # Stays until clicked or dismissed; prints "default" when clicked.
+      action=$(notify-send --app-name=To-do --expire-time=0 --wait \
+        --action=default=Open "Weekly review" \
+        "Sort the Inbox into topics, mark what is done, then M-x MJ-org-archive-done.") || true
+      if [ "$action" = default ]; then
+        emacsclient -n -c "$file"
+      fi
+    '';
+  };
+
+  systemd.user.timers.todo-review = {
+    description = "Sunday evening: review the to-do list";
+    wantedBy = [ "graphical-session.target" ]; # only while logged in
+    partOf = [ "graphical-session.target" ];
+    timerConfig = {
+      OnCalendar = "Sun *-*-* 19:00:00";
+      Persistent = true; # missed (off or asleep): at the next login or wake-up
+    };
+  };
+}
 #+end_src
 
 ** Terminal
