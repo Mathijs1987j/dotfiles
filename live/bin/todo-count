@@ -31,6 +31,7 @@ awk '
     tip = ""
     for (i = 1; i <= k; i++)
       tip = tip (i > 1 ? "\\n" : "") esc(order[i]) ": " n[order[i]]
-    printf "{\"text\": \"todo %d\", \"tooltip\": \"%s\"}\n", total, tip
+    # \uf0ae: the checklist icon of the Nerd Font (Font Awesome "tasks")
+    printf "{\"text\": \"\\uf0ae %d\", \"tooltip\": \"%s\"}\n", total, tip
   }
 ' "$file"
