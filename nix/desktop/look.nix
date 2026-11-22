@@ -6,6 +6,7 @@
   users.users.${username}.packages = with pkgs; [
     adw-gtk3
     adwaita-icon-theme
+    adwaita-icon-theme-legacy # the older full-colour icons (blueman's devices)
   ];
 
   # The wallpaper: NixOS's own artwork in the desktop's colours, at a fixed

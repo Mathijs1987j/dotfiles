@@ -256,7 +256,6 @@ spawn-at-startup "mako"
 spawn-at-startup "swayidle" "-w"
 
 // Tray and helpers (config.org: Desktop / Tray and helpers)
-spawn-at-startup "blueman-applet"
 spawn-at-startup "udiskie" "--tray"
 spawn-at-startup "wlsunset" "-l" "52.1" "-L" "5.3"  // latitude, longitude
 spawn-at-startup "sh" "-c" "wl-paste --watch cliphist store"

@@ -1654,7 +1654,7 @@ each workspace a plain grey, and the picture shows only in the overview and
 for a moment while switching workspaces. The wallpaper then stays still
 while workspaces slide over it. The other session programs start from their own
 sections further down (notifications, idle, tray), and the bar, the Emacs
-daemon, the network applet and the polkit agent are services that systemd
+daemon, the network and Bluetooth applets and the polkit agent are services that systemd
 starts with the session. Screenshots go to =~/Pictures/Screenshots= and the
 clipboard.
 
@@ -2348,12 +2348,24 @@ spawn-at-startup "swayidle" "-w"
 
 The small programs a desktop environment would bring along:
 
-- the network menu (nm-applet) and the polkit agent, the dialog that asks
-  your password for administrative actions: services that systemd starts
-  with the session;
-- the Bluetooth menu (blueman), USB drives with an eject button (udiskie),
-  warmer colours in the evening (wlsunset, from latitude and longitude),
-  and the clipboard history (=Mod+Shift+C=): started by niri.
+- the network menu (nm-applet), the Bluetooth menu (blueman) and the polkit
+  agent, the dialog that asks your password for administrative actions:
+  services that systemd starts with the session;
+- USB drives with an eject button (udiskie), warmer colours in the evening
+  (wlsunset, from latitude and longitude), and the clipboard history
+  (=Mod+Shift+C=): started by niri.
+
+*The Bluetooth icon.* Like KeePassXC (see [[*Passwords: nix/desktop/passwords.nix][Passwords]]), blueman's applet
+looks for the tray only once, when it starts. Started by niri, it lost the
+race with Waybar (also started at that moment, by systemd): the applet ran,
+but without an icon. So it is a systemd user service too, started after
+Waybar and once the tray answers on the session bus. blueman brings its own
+=blueman-applet.service=; the block below only adds when it starts, so
+=systemctl --user cat blueman-applet= shows blueman's unit plus these
+lines. If you quit the applet, =systemctl --user start blueman-applet=
+brings it back. Without the icon, =blueman-manager= (or "Bluetooth" in
+fuzzel) still opens the device list. Pairing and trusted devices are state,
+in =/var/lib/bluetooth=.
 
 #+begin_src nix
 # GENERATED from config.org ("Desktop / Tray and helpers"). Do not edit; edit config.org.
@@ -2378,6 +2390,27 @@ The small programs a desktop environment would bring along:
     };
   };
 
+  # The Bluetooth applet: blueman's own unit, started with the session once
+  # Waybar's tray is there (see the prose). No ExecStart here: blueman's
+  # unit has it, and a second one would be an error.
+  systemd.user.services.blueman-applet = {
+    wantedBy = [ "graphical-session.target" ];
+    partOf = [ "graphical-session.target" ];
+    after = [ "graphical-session.target" "waybar.service" ];
+    serviceConfig = {
+      # Wait (at most 10 s) until Waybar's tray is on the session bus.
+      ExecStartPre = pkgs.writeShellScript "wait-for-tray" ''
+        for _ in $(seq 50); do
+          ${pkgs.systemd}/bin/busctl --user status org.kde.StatusNotifierWatcher \
+            >/dev/null 2>&1 && exit 0
+          sleep 0.2
+        done
+        exit 0 # start anyway, rather than not at all
+      '';
+      Restart = "on-failure";
+    };
+  };
+
   users.users.${username}.packages = with pkgs; [
     udiskie # mount USB drives, tray icon to eject
     wlsunset # warmer screen colours in the evening
@@ -2390,7 +2423,6 @@ The small programs a desktop environment would bring along:
 
 #+begin_src kdl
 // Tray and helpers (config.org: Desktop / Tray and helpers)
-spawn-at-startup "blueman-applet"
 spawn-at-startup "udiskie" "--tray"
 spawn-at-startup "wlsunset" "-l" "52.1" "-L" "5.3"  // latitude, longitude
 spawn-at-startup "sh" "-c" "wl-paste --watch cliphist store"
@@ -2406,6 +2438,12 @@ makes older GTK3 programs match modern GTK4 ones; the dark preference is a
 dconf setting that GTK4 programs and LibreWolf read through the portal. The
 two Qt programs (MuseScore, Shotcut) have dark themes of their own, chosen
 in their settings. The cursor is Adwaita, set for niri and for GTK.
+
+The icon theme is Adwaita. Its current version keeps only the modern
+symbolic icons; the older full-colour ones (=audio-card=, which blueman uses
+for speakers, and many others) moved to a separate theme, AdwaitaLegacy,
+which Adwaita falls back on when it is installed. Without it, blueman's
+window showed blank devices and printed "Failed to look up icon".
 
 Text fields in GTK3 programs, LibreWolf's included, use Emacs keys: =C-a=
 and =C-e= for the start and end of the line, =C-f=, =C-b=, =M-f=, =M-b= to
@@ -2427,6 +2465,7 @@ your own value on top, which wins.
   users.users.${username}.packages = with pkgs; [
     adw-gtk3
     adwaita-icon-theme
+    adwaita-icon-theme-legacy # the older full-colour icons (blueman's devices)
   ];
 
   # The wallpaper: NixOS's own artwork in the desktop's colours, at a fixed
