@@ -2,11 +2,33 @@
 # nix/desktop/look.nix: themes, dark mode, cursor.
 { pkgs, username, ... }:
 
+let
+  # AdwaitaFull: no icons of its own, only the order to look in (see the
+  # prose). GTK needs at least one folder in a theme, so it has an empty one.
+  adwaita-full = pkgs.runCommand "adwaita-full-icon-theme" { } ''
+    theme=$out/share/icons/AdwaitaFull
+    mkdir -p $theme/scalable/apps
+    cat > $theme/index.theme <<'EOF'
+    [Icon Theme]
+    Name=AdwaitaFull
+    Comment=Adwaita, then the legacy full-colour icons
+    Inherits=Adwaita,AdwaitaLegacy,hicolor
+    Directories=scalable/apps
+
+    [scalable/apps]
+    Size=16
+    MinSize=8
+    MaxSize=512
+    Type=Scalable
+    EOF
+  '';
+in
 {
   users.users.${username}.packages = with pkgs; [
     adw-gtk3
     adwaita-icon-theme
     adwaita-icon-theme-legacy # the older full-colour icons (blueman's devices)
+    adwaita-full # the icon theme: Adwaita, then the legacy icons
   ];
 
   # The wallpaper: NixOS's own artwork in the desktop's colours, at a fixed
@@ -24,7 +46,7 @@
       settings."org/gnome/desktop/interface" = {
         color-scheme = "prefer-dark";
         gtk-theme = "adw-gtk3-dark";
-        icon-theme = "Adwaita";
+        icon-theme = "AdwaitaFull"; # Adwaita, then the legacy icons
         cursor-theme = "Adwaita";
         gtk-key-theme = "Emacs"; # Emacs keys in text fields
       };

@@ -2439,11 +2439,17 @@ dconf setting that GTK4 programs and LibreWolf read through the portal. The
 two Qt programs (MuseScore, Shotcut) have dark themes of their own, chosen
 in their settings. The cursor is Adwaita, set for niri and for GTK.
 
-The icon theme is Adwaita. Its current version keeps only the modern
-symbolic icons; the older full-colour ones (=audio-card=, which blueman uses
-for speakers, and many others) moved to a separate theme, AdwaitaLegacy,
-which Adwaita falls back on when it is installed. Without it, blueman's
-window showed blank devices and printed "Failed to look up icon".
+*Icons.* Adwaita's current version keeps only the modern symbolic icons; the
+older full-colour ones (=audio-card=, which blueman uses for speakers, and
+many others) moved to a separate theme, AdwaitaLegacy. Adwaita itself does
+not fall back on it (its =index.theme= says =Inherits=hicolor=), so
+installing AdwaitaLegacy alone changed nothing: blueman's window still showed
+blank devices and printed "Failed to look up icon". So the icon theme is a
+tiny one of my own, =AdwaitaFull=: it contains no icons, only the order in
+which to look, Adwaita first, then AdwaitaLegacy, then hicolor (where
+programs put their own icons). Everything looks like Adwaita; an icon only
+the legacy theme has is found there. A program picks up the icon theme when
+it next starts.
 
 Text fields in GTK3 programs, LibreWolf's included, use Emacs keys: =C-a=
 and =C-e= for the start and end of the line, =C-f=, =C-b=, =M-f=, =M-b= to
@@ -2461,11 +2467,33 @@ your own value on top, which wins.
 # nix/desktop/look.nix: themes, dark mode, cursor.
 { pkgs, username, ... }:
 
+let
+  # AdwaitaFull: no icons of its own, only the order to look in (see the
+  # prose). GTK needs at least one folder in a theme, so it has an empty one.
+  adwaita-full = pkgs.runCommand "adwaita-full-icon-theme" { } ''
+    theme=$out/share/icons/AdwaitaFull
+    mkdir -p $theme/scalable/apps
+    cat > $theme/index.theme <<'EOF'
+    [Icon Theme]
+    Name=AdwaitaFull
+    Comment=Adwaita, then the legacy full-colour icons
+    Inherits=Adwaita,AdwaitaLegacy,hicolor
+    Directories=scalable/apps
+
+    [scalable/apps]
+    Size=16
+    MinSize=8
+    MaxSize=512
+    Type=Scalable
+    EOF
+  '';
+in
 {
   users.users.${username}.packages = with pkgs; [
     adw-gtk3
     adwaita-icon-theme
     adwaita-icon-theme-legacy # the older full-colour icons (blueman's devices)
+    adwaita-full # the icon theme: Adwaita, then the legacy icons
   ];
 
   # The wallpaper: NixOS's own artwork in the desktop's colours, at a fixed
@@ -2483,7 +2511,7 @@ your own value on top, which wins.
       settings."org/gnome/desktop/interface" = {
         color-scheme = "prefer-dark";
         gtk-theme = "adw-gtk3-dark";
-        icon-theme = "Adwaita";
+        icon-theme = "AdwaitaFull"; # Adwaita, then the legacy icons
         cursor-theme = "Adwaita";
         gtk-key-theme = "Emacs"; # Emacs keys in text fields
       };
@@ -2501,7 +2529,7 @@ your own value on top, which wins.
 # GENERATED from config.org ("Desktop / Look"). Do not edit; edit config.org.
 [Settings]
 gtk-theme-name=adw-gtk3-dark
-gtk-icon-theme-name=Adwaita
+gtk-icon-theme-name=AdwaitaFull
 gtk-cursor-theme-name=Adwaita
 gtk-cursor-theme-size=24
 gtk-key-theme-name=Emacs
@@ -2512,7 +2540,7 @@ gtk-application-prefer-dark-theme=1
 #+begin_src conf :tangle live/gtk/gtk-4.0.ini
 # GENERATED from config.org ("Desktop / Look"). Do not edit; edit config.org.
 [Settings]
-gtk-icon-theme-name=Adwaita
+gtk-icon-theme-name=AdwaitaFull
 gtk-cursor-theme-name=Adwaita
 gtk-cursor-theme-size=24
 gtk-font-name=<<font-ui>> 11
