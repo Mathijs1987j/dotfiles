@@ -447,6 +447,11 @@ With a prefix argument, DELETE the item instead of saving it to the kill ring."
 (setq org-todo-keywords '((sequence "TODO" "|" "DONE" "CANCELLED"))
       org-log-done 'time)
 
+(setq org-refile-targets '((nil :maxlevel . 2)) ; this file, levels 1-2
+      org-refile-use-outline-path 'file         ; targets as ToDo.org/Topic/...
+      org-outline-path-complete-in-steps nil    ; complete the path in one go
+      org-refile-allow-creating-parent-nodes 'confirm) ; new heading: ask first
+
 (defun MJ-org-archive-done ()
   "Archive every level-2 DONE or CANCELLED entry of this Org file.
 Each goes to NAME-archive.org next to this file, under a level-1 heading

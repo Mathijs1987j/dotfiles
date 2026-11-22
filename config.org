@@ -1,6 +1,6 @@
 #+TITLE: Configuration: NixOS, Emacs and LaTeX
 #+AUTHOR: MJ
-#+DATE: 2026-11-24
+#+DATE: 2026-11-26
 #+STARTUP: overview
 #+PROPERTY: header-args :mkdirp yes :noweb yes :eval no
 #+PROPERTY: header-args:emacs-lisp :tangle live/emacs/config.el :eval yes
@@ -6073,9 +6073,26 @@ the repository (see [[*State: what is not in this file][State]]). This section i
 (=org-log-done=). A =#+TODO:= line in an Org file replaces these keywords
 for that file only.
 
+*Sorting* is refiling: =C-c C-w= moves the heading under the cursor, with
+everything below it, under another heading, and adjusts its level to fit.
+=M-<up>= and =M-<down>= cannot do this (they stay within the topic), and
+promoting with =M-<left>= makes the following headings its children. Refile
+offers the headings of levels 1 and 2 of the current file, so the topics
+and the to-dos in them, written as a path (=ToDo.org/Courses/Mark tests=).
+The file itself is also offered (=ToDo.org/=): refiling there makes the
+heading a level-1 heading, a new topic. A path that does not exist yet,
+such as =ToDo.org/New topic=, is created after a question. =C-u C-c C-w=
+jumps to a heading instead of moving anything. These settings hold for
+every Org file, not only the to-do list.
+
 #+begin_src emacs-lisp
 (setq org-todo-keywords '((sequence "TODO" "|" "DONE" "CANCELLED"))
       org-log-done 'time)
+
+(setq org-refile-targets '((nil :maxlevel . 2)) ; this file, levels 1-2
+      org-refile-use-outline-path 'file         ; targets as ToDo.org/Topic/...
+      org-outline-path-complete-in-steps nil    ; complete the path in one go
+      org-refile-allow-creating-parent-nodes 'confirm) ; new heading: ask first
 
 (defun MJ-org-archive-done ()
   "Archive every level-2 DONE or CANCELLED entry of this Org file.
@@ -6104,6 +6121,9 @@ named after its topic (its level-1 heading here). Both files are saved."
     (message "Archived %d to-do%s to %s" count (if (= count 1) "" "s")
              (file-name-nondirectory archive))))
 #+end_src
+
+#+RESULTS:
+: MJ-org-archive-done
 
 *[NixOS]* The list exists on the laptop only. The capture frame is an
 ordinary =emacsclient= frame whose name, =todo-capture=, becomes the
