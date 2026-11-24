@@ -1,6 +1,6 @@
 #+TITLE: Configuration: NixOS, Emacs and LaTeX
 #+AUTHOR: MJ
-#+DATE: 2026-11-20
+#+DATE: 2026-11-24
 #+STARTUP: overview
 #+PROPERTY: header-args :mkdirp yes :noweb yes :eval no
 #+PROPERTY: header-args:emacs-lisp :tangle live/emacs/config.el :eval yes
@@ -5608,7 +5608,7 @@ be next to the deck.
     <script>
       Reveal.initialize({
         width: 1560,
-	height: 720,
+	height: 878,
         hash: true,
 	transition: "convex",
         mathjax4: MJNotation.mathjax4(),
