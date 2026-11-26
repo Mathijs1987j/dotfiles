@@ -1742,6 +1742,7 @@ binds {
     Mod+T hotkey-overlay-title="Terminal: Alacritty" { spawn "alacritty"; }
     Mod+Shift+T hotkey-overlay-title="Terminal: foot" { spawn "foot"; }
     Mod+D hotkey-overlay-title="Launcher: fuzzel" { spawn "fuzzel"; }
+    Mod+Shift+F hotkey-overlay-title="Launcher: File Explorer" { spawn "nautilus"; }
     Mod+E hotkey-overlay-title="Emacs (client frame)" { spawn "emacsclient" "-c"; }
     // Mod+A: add a to-do in a small floating Emacs frame (see To-do list).
     Mod+A hotkey-overlay-title="Add a to-do" { spawn "emacsclient" "-n" "-c" "-F" r#"((name . "todo-capture"))"# "-e" r#"(org-capture nil "t")"#; }
@@ -1860,7 +1861,7 @@ adding =Shift= goes to the next monitor.
     // Sizes
     Mod+R       { switch-preset-column-width; }
     Mod+F       { maximize-column; }
-    Mod+Shift+F { fullscreen-window; }
+    Mod+Ctrl+F { fullscreen-window; }
     Mod+C       { center-column; }
     Mod+Minus   { set-column-width "-10%"; }
     Mod+Equal   { set-column-width "+10%"; }
@@ -1885,7 +1886,7 @@ your screen (a terminal, Emacs). The closing =}= ends the =binds= block.
 
 #+begin_src kdl
     // Projector: mirror the current screen into a window; move that window
-    // to the projector and make it fullscreen (Mod+Shift+F).
+    // to the projector and make it fullscreen (Mod+Ctrl+F).
     Mod+P repeat=false hotkey-overlay-title="Mirror this screen (wl-mirror)" {
         spawn-sh "wl-mirror $(niri msg --json focused-output | jq -r .name)";
     }
