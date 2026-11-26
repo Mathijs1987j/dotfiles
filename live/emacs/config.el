@@ -447,37 +447,108 @@ With a prefix argument, DELETE the item instead of saving it to the kill ring."
 (setq org-todo-keywords '((sequence "TODO" "|" "DONE" "CANCELLED"))
       org-log-done 'time)
 
-(setq org-refile-targets '((nil :maxlevel . 2)) ; this file, levels 1-2
+(setq org-refile-targets '((nil :maxlevel . 3)) ; this file, levels 1-2
       org-refile-use-outline-path 'file         ; targets as ToDo.org/Topic/...
       org-outline-path-complete-in-steps nil    ; complete the path in one go
       org-refile-allow-creating-parent-nodes 'confirm) ; new heading: ask first
 
+(defun MJ--org-subtree-open-p ()
+  "Non-nil if a heading below the one at point has a not-done keyword."
+  (save-excursion
+    (org-back-to-heading t)
+    (let ((end (save-excursion (org-end-of-subtree t t) (point)))
+          open)
+      (forward-line 1)
+      (while (and (not open)
+                  (re-search-forward org-outline-regexp-bol end t))
+        (when (member (org-get-todo-state) org-not-done-keywords)
+          (setq open t)))
+      open)))
+
+(defun MJ--org-archive-goto-path (path)
+  "Find or make the chain of headings PATH (titles, from level 1 down).
+Work in the current buffer; leave point at the start of the line where a
+new last child of the final heading goes, and return that heading's level
+\(0 for an empty PATH, meaning the end of the buffer)."
+  (goto-char (point-min))
+  (let ((level 0)
+        (end (point-max)))
+    (dolist (title path)
+      (let ((child-re (format "^\\*\\{%d\\}[ \t]" (1+ level)))
+            found)
+        ;; A direct child of the heading reached so far, with this title?
+        (while (and (not found) (re-search-forward child-re end t))
+          (when (equal (car (last (org-get-outline-path t))) title)
+            (setq found t)))
+        (unless found               ; not there yet: make it, as last child
+          (goto-char end)
+          (unless (bolp) (insert "\n"))
+          (insert (make-string (1+ level) ?*) " " title "\n")
+          (forward-line -1))
+        (org-back-to-heading t)
+        (setq level (1+ level)
+              end (save-excursion (org-end-of-subtree t t) (point)))
+        (forward-line 1)))
+    (goto-char end)
+    (unless (bolp) (insert "\n"))
+    level))
+
+(defun MJ--org-archive-subtree-with-path (archive)
+  "Move the subtree at point to the file ARCHIVE, under the same parents.
+The parent headings are made in ARCHIVE when missing, and stay here."
+  (org-back-to-heading t)
+  (let ((path (org-get-outline-path))
+        (source (abbreviate-file-name buffer-file-name)))
+    ;; Record where it came from, as Org's own archiving does.
+    (org-entry-put nil "ARCHIVE_TIME" (format-time-string "%Y-%m-%d %a %H:%M"))
+    (org-entry-put nil "ARCHIVE_FILE" source)
+    (org-entry-put nil "ARCHIVE_OLPATH" (mapconcat #'identity path "/"))
+    (org-back-to-heading t)
+    (let* ((beg (point))
+           (end (save-excursion (org-end-of-subtree t t) (point)))
+           (tree (buffer-substring beg end)))
+      (with-current-buffer (find-file-noselect archive)
+        (unless (derived-mode-p 'org-mode) (org-mode))
+        (save-excursion
+          (save-restriction
+            (widen)
+            (org-paste-subtree (1+ (MJ--org-archive-goto-path path)) tree))))
+      ;; Not `org-cut-subtree': the kill ring and clipboard stay as they are.
+      (delete-region beg end))))
+
 (defun MJ-org-archive-done ()
-  "Archive every level-2 DONE or CANCELLED entry of this Org file.
-Each goes to NAME-archive.org next to this file, under a level-1 heading
-named after its topic (its level-1 heading here). Both files are saved."
+  "Archive every finished entry of this Org file, at any level.
+An entry is finished when its keyword is DONE or CANCELLED and nothing
+below it is still open.  It moves, with everything below it, to
+NAME-archive.org next to this file, under the same chain of parent
+headings, which are made there when missing; the parents stay here.  A
+finished entry with an open entry below it stays, but its finished
+entries below are archived.  Both files are saved."
   (interactive)
   (unless (derived-mode-p 'org-mode)
     (user-error "Not in an Org file"))
   (let* ((file (or buffer-file-name (user-error "This buffer has no file")))
          (archive (concat (file-name-sans-extension file) "-archive.org"))
-         (count 0))
+         (count 0)
+         (kept 0))
     (org-map-entries
      (lambda ()
-       (let* ((topic (or (car (org-get-outline-path)) "No topic"))
-              ;; Org passes both parts through `format': protect any %.
-              (org-archive-location
-               (concat (string-replace "%" "%%" archive)
-                       "::* " (string-replace "%" "%%" topic))))
-         (org-archive-subtree)
+       (if (MJ--org-subtree-open-p)
+           (setq kept (1+ kept))
+         (MJ--org-archive-subtree-with-path archive)
          (setq count (1+ count))
          ;; The entry is gone: continue from what now stands in its place.
          (setq org-map-continue-from (line-beginning-position))))
-     "LEVEL=2/DONE|CANCELLED" 'file)
+     "/DONE|CANCELLED" 'file)
     (when (> count 0)
+      (with-current-buffer (find-file-noselect archive) (save-buffer))
       (save-buffer))
-    (message "Archived %d to-do%s to %s" count (if (= count 1) "" "s")
-             (file-name-nondirectory archive))))
+    (message "Archived %d entr%s to %s%s" count (if (= count 1) "y" "ies")
+             (file-name-nondirectory archive)
+             (if (> kept 0)
+                 (format "; kept %d finished one%s with open items below"
+                         kept (if (= kept 1) "" "s"))
+               ""))))
 
 (defconst MJ-todo-file (expand-file-name "~/Documents/ToDo/ToDo.org")
   "The to-do list (state: not in the repository).")
