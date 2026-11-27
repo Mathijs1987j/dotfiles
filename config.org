@@ -1,6 +1,6 @@
 #+TITLE: Configuration: NixOS, Emacs and LaTeX
 #+AUTHOR: MJ
-#+DATE: 2026-11-26
+#+DATE: 2026-11-27
 #+STARTUP: overview
 #+PROPERTY: header-args :mkdirp yes :noweb yes :eval no
 #+PROPERTY: header-args:emacs-lisp :tangle live/emacs/config.el :eval yes
@@ -1685,6 +1685,12 @@ The small Emacs frame for a new to-do (=Mod+A=) floats in the middle; it is
 recognised by its title (see [[*To-do list: nix/desktop/todo.nix][To-do list]]).
 
 #+begin_src kdl
+// New windows take the full width of the screen by default.
+// Mod+F toggles back to the normal 0.5 width.
+window-rule {
+    open-maximized true
+}
+
 // Where windows open. Find an app's id with `niri msg windows` while it runs.
 window-rule {
     match app-id=r#"^(librewolf|firefox)$"#

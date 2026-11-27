@@ -70,6 +70,12 @@ hotkey-overlay {
     skip-at-startup             // Mod+Shift+/ shows the key list any time
 }
 
+// New windows take the full width of the screen by default.
+// Mod+F toggles back to the normal 0.5 width.
+window-rule {
+    open-maximized true
+}
+
 // Where windows open. Find an app's id with `niri msg windows` while it runs.
 window-rule {
     match app-id=r#"^(librewolf|firefox)$"#
