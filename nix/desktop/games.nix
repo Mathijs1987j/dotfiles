@@ -24,12 +24,13 @@ let
         + builtins.readFile script;
     };
 
+  # A fuzzel entry. ICON is a path to an image: the theme's generic
+  # "applications-games" isn't in Adwaita, so it showed no icon.
   entry =
-    name: desktopName:
+    name: desktopName: icon:
     pkgs.makeDesktopItem {
-      inherit name desktopName;
+      inherit name desktopName icon;
       exec = name;
-      icon = "applications-games";
       categories = [ "Game" ];
     };
 
@@ -50,7 +51,7 @@ let
     sha256 = cfg.civ4.sha256;
     bug = cfg.civ4.bug;
     bug_sha256 = cfg.civ4.bugSha256;
-  } (with pkgs; [ winePackages.stable winetricks coreutils findutils unzip cabextract gnused gawk ]);
+  } (with pkgs; [ winePackages.stable winetricks coreutils findutils unzip cabextract gnused gawk icoutils ]);
 in
 {
   options.games = {
@@ -99,7 +100,8 @@ in
     (lib.mkIf cfg.caesar3.enable {
       users.users.${username}.packages = [
         caesar3
-        (entry "caesar3" "Caesar III")
+        (entry "caesar3" "Caesar III"
+          "${augustus}/share/icons/hicolor/256x256/apps/com.github.keriew.augustus.png")
       ];
       # Scale and pointer size, read at every start (see "Caesar III").
       dotfiles.links.".config/caesar3/caesar3.conf" = "live/caesar3/caesar3.conf";
@@ -108,7 +110,10 @@ in
       hardware.graphics.enable32Bit = true; # 32-bit graphics for a 32-bit game
       users.users.${username}.packages = [
         civ4
-        (entry "civ4" "Civilization IV: Beyond the Sword")
+        # The icon is taken from the game's program by the launcher, on its
+        # first start (see "Civilization IV"); until then fuzzel shows none.
+        (entry "civ4" "Civilization IV: Beyond the Sword"
+          "/home/${username}/.local/share/wine/civ4/civ4.png")
       ];
       # Resolution and fullscreen, read at every start (see "Civilization IV").
       dotfiles.links.".config/civ4/civ4.conf" = "live/civ4/civ4.conf";

@@ -1,6 +1,6 @@
 #+TITLE: Configuration: NixOS, Emacs and LaTeX
 #+AUTHOR: MJ
-#+DATE: 2026-11-27
+#+DATE: 2026-11-28
 #+STARTUP: overview
 #+PROPERTY: header-args :mkdirp yes :noweb yes :eval no
 #+PROPERTY: header-args:emacs-lisp :tangle live/emacs/config.el :eval yes
@@ -1867,7 +1867,7 @@ adding =Shift= goes to the next monitor.
     // Sizes
     Mod+R       { switch-preset-column-width; }
     Mod+F       { maximize-column; }
-    Mod+Ctrl+F { fullscreen-window; }
+    Mod+Ctrl+F  { fullscreen-window; }
     Mod+C       { center-column; }
     Mod+Minus   { set-column-width "-10%"; }
     Mod+Equal   { set-column-width "+10%"; }
@@ -4471,7 +4471,10 @@ would skip the launcher's settings anyway. So the launcher switches
 =winemenubuilder= off (=WINEDLLOVERRIDES=, also while installing) and the
 only entry is the one from this config. Wine reruns it after each Wine
 update, which is why it is off at every start, not just at installation.
-Its icon is the game's own: on the first start after installation the
+At each start Wine still tries to run it and prints an error ending in
+=winemenubuilder.exe -a -r" (126)=: that is the switch-off working.
+(Another harmless line at each start, ='import site' failed=, comes from the
+game's own built-in Python.) Its icon is the game's own: on the first start after installation the
 launcher takes it from =Civ4BeyondSword.exe= (with icoutils: =wrestool=
 pulls out the icon, =icotool= turns its largest size into a PNG) and saves it
 in the prefix as =civ4.png=, so deleting the prefix removes it too.
@@ -4529,6 +4532,23 @@ drawn by the game itself and stay small; city names on the map are set
 elsewhere (=CITY_BILLBOARDS= in =CIV4ArtDefines_Misc.xml=); and with large
 factors some text overflows its box, e.g. in the Civilopedia.
 
+*Switching windows.* After a few minutes on another workspace, the game hung
+for up to half a minute when you came back to it. A window that isn't
+visible gets no frame callbacks from niri (Wayland's way of saving power),
+and by default every frame the game draws waits for the next screen refresh;
+the game's clock runs on meanwhile, and it has to catch up. With
+=vblank_mode=0= (a Mesa setting: never wait for the refresh) the hangs
+stopped. Mesa confirms it at every start with "ATTENTION: default value of
+option vblank_mode overridden by environment". The cost: the game draws as
+many frames as it can, so the laptop works a bit harder while it runs.
+
+Tried first and dropped: running the game in a window that a niri rule made
+fullscreen (the window stayed under the bar, too tall for the screen, and
+drawn over the other columns instead of tiled), and Wine's virtual desktop
+(=wine explorer /desktop=...=; niri tiled it well, but it didn't stop the
+hangs, and at the screen's 1.75 scale the mouse sometimes pointed elsewhere
+than the cursor showed).
+
 Wine's DPI is set to the standard 96 when the prefix is created
 (=LogPixels=). That was part of the setup that worked; whether the game needs
 it was not tested separately.
@@ -4560,6 +4580,9 @@ export WINEDEBUG=fixme-all
 export LC_ALL=C
 # No menu entries from Wine (see "No menu entries from Wine").
 export WINEDLLOVERRIDES="winemenubuilder.exe=d"
+# Don't wait for the screen's refresh: no hangs after switching windows
+# (see "Switching windows").
+export vblank_mode=0
 game_windows='C:\GOG Games\Civilization IV Complete'
 
 if [ ! -e "$WINEPREFIX/.installed" ]; then

@@ -6,6 +6,11 @@ export WINEPREFIX="${XDG_DATA_HOME:-$HOME/.local/share}/wine/civ4"
 export WINEARCH=win32
 export WINEDEBUG=fixme-all
 export LC_ALL=C
+# No menu entries from Wine (see "No menu entries from Wine").
+export WINEDLLOVERRIDES="winemenubuilder.exe=d"
+# Don't wait for the screen's refresh: no hangs after switching windows
+# (see "Switching windows").
+export vblank_mode=0
 game_windows='C:\GOG Games\Civilization IV Complete'
 
 if [ ! -e "$WINEPREFIX/.installed" ]; then
@@ -14,7 +19,7 @@ if [ ! -e "$WINEPREFIX/.installed" ]; then
   echo "Creating the Wine prefix, with msxml3 and d3dx9 (needs the internet) ..."
   mkdir -p "$(dirname "$WINEPREFIX")"
   # No Wine Mono (.NET) or Wine Gecko: the game needs neither, so don't ask.
-  WINEDLLOVERRIDES="mscoree,mshtml=" wineboot --init
+  WINEDLLOVERRIDES="mscoree,mshtml=;winemenubuilder.exe=d" wineboot --init
   winetricks -q isolate_home msxml3 d3dx9
   # Wine's standard DPI, as in the setup that worked (see "Resolution").
   wine reg add 'HKCU\Control Panel\Desktop' /v LogPixels /t REG_DWORD /d 96 /f
@@ -34,6 +39,29 @@ if [ -z "$exe" ]; then
   exit 1
 fi
 bts=$(dirname "$exe")
+
+# The game's icon for its fuzzel entry: the largest image in the program's
+# icon, as a PNG in the prefix. Without it the game still starts.
+icon="$WINEPREFIX/civ4.png"
+if [ ! -f "$icon" ]; then
+  tmp=$(mktemp -d)
+  if wrestool -x -t 14 -o "$tmp" "$exe" 2>/dev/null; then
+    for ico in "$tmp"/*.ico; do
+      icotool -x -o "$tmp" "$ico" 2>/dev/null || true
+    done
+  fi
+  # icotool names each image NAME_INDEX_WIDTHxHEIGHTxDEPTH.png: sort on the
+  # width, then the colour depth, and take the last one.
+  best=$(find "$tmp" -name '*.png' \
+    | sed -E 's/.*_([0-9]+)x[0-9]+x([0-9]+)\.png$/\1 \2 &/' \
+    | sort -k1,1n -k2,2n | tail -n 1 | cut -d' ' -f3-)
+  if [ -n "$best" ]; then
+    cp "$best" "$icon"
+  else
+    echo "No icon found in Civ4BeyondSword.exe; the fuzzel entry stays without one." >&2
+  fi
+  rm -rf "$tmp"
+fi
 
 my_games="$WINEPREFIX/drive_c/users/$USER/Documents/My Games/Beyond the Sword"
 if [ ! -d "$my_games/BUG Mod" ]; then
