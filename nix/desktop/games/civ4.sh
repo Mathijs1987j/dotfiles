@@ -63,6 +63,13 @@ if [ ! -f "$icon" ]; then
   rm -rf "$tmp"
 fi
 
+# Totestra, the map script with "Full of resources" (see "More resources"),
+# in the game's PublicMaps; replaced whenever config.org has a newer one.
+if ! cmp -s "$totestra" "$bts/PublicMaps/Totestra.py"; then
+  mkdir -p "$bts/PublicMaps"
+  cp --no-preserve=mode "$totestra" "$bts/PublicMaps/Totestra.py"
+fi
+
 my_games="$WINEPREFIX/drive_c/users/$USER/Documents/My Games/Beyond the Sword"
 if [ ! -d "$my_games/BUG Mod" ]; then
   zip=$(find_one "$bug" "the BUG mod's zip from civ4bug.sourceforge.net")

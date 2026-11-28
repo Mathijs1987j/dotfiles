@@ -1,0 +1,16 @@
+GENERATED from config.org ("Games / Civilization IV with BUG"). Do not edit; edit config.org.
+--- a/Totestra.py
++++ b/Totestra.py
+@@ -5307,7 +5307,11 @@
+     }
+     # Scale if they want a bigger or smaller world
+     [eWorldSize] = argsList
+-    (sizex, sizey) = grid_sizes[eWorldSize]
++    if (eWorldSize == -1): # (-1,) is passed to function on loads
++        return []
++    # A world size added beyond Huge (CustomAssets) is not in the list above:
++    # make it Totestra's Huge. ("Have bigger maps" is Totestra's own larger size.)
++    (sizex, sizey) = grid_sizes.get(eWorldSize, grid_sizes[WorldSizeTypes.WORLDSIZE_HUGE])
+     gc = CyGlobalContext()
+     mmap = gc.getMap()
+     if mmap.getCustomMapOption(4) == 1: # Big maps

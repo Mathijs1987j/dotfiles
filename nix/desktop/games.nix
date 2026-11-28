@@ -39,6 +39,21 @@ let
     patches = (old.patches or [ ]) ++ [ ./games/augustus-mouse.patch ];
   });
 
+  # Totestra, a map script with a "Full of resources" option (see "More
+  # resources"): one file from GitHub, pinned by commit and checksum, with
+  # Windows line endings removed and the patch for the bigger world sizes.
+  totestra = pkgs.runCommand "Totestra.py" {
+    src = pkgs.fetchurl {
+      url = "https://raw.githubusercontent.com/samboy/Totestra-mapscript/7fe8ff0d3db4ba8ee66d89f43ed76d5d76b18cf6/Totestra.py";
+      hash = "sha256-CxveWGXhewYqpaCT4c5HhtEy+FSyNr0xcWiK1mm8hCM=";
+    };
+    nativeBuildInputs = [ pkgs.patch ];
+  } ''
+    tr -d '\r' < $src > Totestra.py
+    patch Totestra.py ${./games/totestra-sizes.patch}
+    cp Totestra.py $out
+  '';
+
   caesar3 = launcher "caesar3" ./games/caesar3.sh {
     inherit installers;
     installer = cfg.caesar3.installer;
@@ -51,6 +66,7 @@ let
     sha256 = cfg.civ4.sha256;
     bug = cfg.civ4.bug;
     bug_sha256 = cfg.civ4.bugSha256;
+    totestra = "${totestra}";
   } (with pkgs; [ winePackages.stable winetricks coreutils findutils unzip cabextract gnused gawk gnugrep diffutils icoutils ]);
 in
 {
