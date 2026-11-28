@@ -4195,7 +4195,7 @@ let
     sha256 = cfg.civ4.sha256;
     bug = cfg.civ4.bug;
     bug_sha256 = cfg.civ4.bugSha256;
-  } (with pkgs; [ winePackages.stable winetricks coreutils findutils unzip cabextract gnused gawk icoutils ]);
+  } (with pkgs; [ winePackages.stable winetricks coreutils findutils unzip cabextract gnused gawk gnugrep diffutils icoutils ]);
 in
 {
   options.games = {
@@ -4549,6 +4549,33 @@ drawn over the other columns instead of tiled), and Wine's virtual desktop
 hangs, and at the screen's 1.75 scale the mouse sometimes pointed elsewhere
 than the cursor showed).
 
+*Bigger maps.* The game's largest world size is Huge (128 × 80 tiles, 11
+civilizations). Bigger sizes need no mod: the world sizes are one XML file,
+=CIV4WorldInfo.xml=, and a copy of it in =CustomAssets\XML\GameInfo= with
+extra entries adds sizes to every game, next to BUG. That is how CivFanatics'
+"Gigantic Maps for BtS" works, and mods such as Rise of Mankind add "Giant"
+and "Gigantic" the same way. The launcher writes that copy itself, so it is
+configuration and not a file from the internet: =bigger_maps= in
+=civ4.conf= lists the extra sizes (name, width × height in tiles, default
+number of civilizations). Each new size is a copy of Huge with only its name,
+grid and number of civilizations changed; costs such as research and city
+maintenance stay as on Huge, as most of these tweaks do. Width and height are
+multiples of 4 because the game counts in squares of 4 × 4 tiles, and 18
+civilizations is the game's maximum. The names come from a small text file
+next to it (=CustomAssets\XML\Text\CIV4GameText_BiggerMaps.xml=). Both files
+carry a comment saying the launcher wrote them; the launcher rewrites only its
+own files, empties the game's cache when they change (so the game rereads
+them) and removes them when =bigger_maps= is empty. The sizes appear in /Custom
+Game/ under the map size.
+
+Chosen: Giant (160 × 100 tiles, 14 civilizations; about 1.5 times Huge) and
+Gigantic (200 × 120, 18; about 2.3 times Huge), the sizes from Rise of
+Mankind. Known limits, from players' experience: a map script that keeps its
+own list of grid sizes per world size (instead of taking them from the game)
+doesn't know the new sizes and may fail or fall back to another size; if a
+script fails, pick another one. Late in a game on these maps the
+turns get slow, and a 32-bit game has limited memory.
+
 Wine's DPI is set to the standard 96 when the prefix is created
 (=LogPixels=). That was part of the setup that worked; whether the game needs
 it was not tested separately.
@@ -4567,6 +4594,11 @@ screen_width=2560
 screen_height=1600
 fullscreen=1
 font_scale=1.4
+# bigger_maps: extra world sizes beyond Huge (128 x 80 tiles), separated by
+#   spaces, each as NAME:WIDTHxHEIGHT:CIVS. Width and height in tiles, both
+#   multiples of 4; CIVS is the default number of civilizations, 2 to 18.
+#   Empty: only the game's own sizes.
+bigger_maps="Giant:160x100:14 Gigantic:200x120:18"
 #+end_src
 
 #+begin_src sh :tangle nix/desktop/games/civ4.sh
@@ -4667,11 +4699,12 @@ if [ ! -d "$my_games/BUG Mod" ]; then
 fi
 
 # Resolution and fullscreen from live/civ4/civ4.conf, written into the game's
-# own settings file at every start.
+# own settings file at every start; bigger_maps is used further down.
 screen_width=""
 screen_height=""
 fullscreen=""
 font_scale=""
+bigger_maps=""
 conf="${XDG_CONFIG_HOME:-$HOME/.config}/civ4/civ4.conf"
 if [ -f "$conf" ]; then
   # shellcheck source=/dev/null
@@ -4693,6 +4726,103 @@ if [ -f "$ini" ]; then
 else
   echo "First start: the game creates its settings file now. The resolution"
   echo "from ~/.config/civ4/civ4.conf applies from the next start on."
+fi
+
+# Extra world sizes (bigger_maps in civ4.conf): a copy of the game's world
+# sizes with new ones added, modelled on Huge, in CustomAssets. Rewritten
+# only when it changes; then the game's cache is emptied.
+marker='<!-- Written by the civ4 launcher from bigger_maps in civ4.conf. -->'
+world_out="$my_games/CustomAssets/XML/GameInfo/CIV4WorldInfo.xml"
+text_out="$my_games/CustomAssets/XML/Text/CIV4GameText_BiggerMaps.xml"
+cache="$WINEPREFIX/drive_c/users/$USER/AppData/Local/My Games/Beyond the Sword/cache"
+ours() { [ -f "$1" ] && grep -qF "$marker" "$1"; }
+changed=0
+for size in $bigger_maps; do
+  if ! [[ $size =~ ^[A-Za-z]+:([0-9]+)x([0-9]+):([0-9]+)$ ]] ||
+    (( BASH_REMATCH[1] % 4 || BASH_REMATCH[2] % 4 )) ||
+    (( BASH_REMATCH[3] < 2 || BASH_REMATCH[3] > 18 )); then
+    echo "bigger_maps: '$size' is not NAME:WIDTHxHEIGHT:CIVS (multiples of 4, 2-18 civs); no extra sizes." >&2
+    bigger_maps=""
+    break
+  fi
+done
+world_in=$(find "$bts/Assets" -ipath '*/XML/GameInfo/CIV4WorldInfo.xml' -print -quit 2>/dev/null || true)
+if [ -n "$bigger_maps" ] && [ -n "$world_in" ]; then
+  if [ -f "$world_out" ] && ! ours "$world_out"; then
+    echo "$world_out is not the launcher's; leaving it alone (no extra sizes)." >&2
+  else
+    tmp=$(mktemp -d)
+    # Copy the game's file; at the end of the list, add each new size as a
+    # copy of Huge with its own name, grid (4 tiles per grid square) and
+    # number of civilizations. Text keys that need a text go to keys.tsv.
+    awk -v sizes="$bigger_maps" -v marker="$marker" -v keys="$tmp/keys.tsv" '
+      function emit(spec,   f, wh, up, i, line, key) {
+        split(spec, f, ":"); split(f[2], wh, "x"); up = toupper(f[1])
+        for (i = 1; i <= n; i++) {
+          line = huge[i]
+          if (line ~ /<(Type|Description|Help)>/) {
+            gsub(/HUGE/, up, line)
+            if (line ~ /<(Description|Help)>/ && match(line, /TXT_KEY_[A-Z0-9_]+/)) {
+              key = substr(line, RSTART, RLENGTH)
+              print key "\t" f[1] (line ~ /<Help>/ ? ": " wh[1] " x " wh[2] " tiles" : "") > keys
+            }
+          }
+          else if (line ~ /<iGridWidth>/) sub(/>[0-9]+</, ">" wh[1] / 4 "<", line)
+          else if (line ~ /<iGridHeight>/) sub(/>[0-9]+</, ">" wh[2] / 4 "<", line)
+          else if (line ~ /<iDefaultPlayers>/) sub(/>[0-9]+</, ">" f[3] "<", line)
+          print line
+        }
+      }
+      NR == 1 { print; print marker (/\r$/ ? "\r" : ""); next }
+      /<WorldInfo>/ { inblock = 1; m = 0 }
+      inblock { block[++m] = $0 }
+      inblock && /<Type>WORLDSIZE_HUGE</ { ishuge = 1 }
+      inblock && /<\/WorldInfo>/ {
+        inblock = 0
+        if (ishuge) { n = m; for (i = 1; i <= m; i++) huge[i] = block[i]; ishuge = 0 }
+      }
+      /<\/WorldInfos>/ && n { c = split(sizes, s, " "); for (j = 1; j <= c; j++) emit(s[j]) }
+      { print }
+    ' "$world_in" > "$tmp/world.xml"
+    if [ ! -s "$tmp/keys.tsv" ]; then
+      echo "No Huge world size found in $world_in; no extra sizes." >&2
+    else
+      {
+        echo '<?xml version="1.0" encoding="ISO-8859-1"?>'
+        echo "$marker"
+        echo '<Civ4GameText xmlns="http://www.firaxis.com">'
+        while IFS=$'\t' read -r key text; do
+          echo "  <TEXT>"
+          echo "    <Tag>$key</Tag>"
+          for lang in English French German Italian Spanish; do
+            echo "    <$lang>$text</$lang>"
+          done
+          echo "  </TEXT>"
+        done < "$tmp/keys.tsv"
+        echo '</Civ4GameText>'
+      } > "$tmp/text.xml"
+      mkdir -p "$(dirname "$world_out")" "$(dirname "$text_out")"
+      for pair in "world.xml:$world_out" "text.xml:$text_out"; do
+        if ! cmp -s "$tmp/${pair%%:*}" "${pair#*:}"; then
+          cp "$tmp/${pair%%:*}" "${pair#*:}"
+          changed=1
+        fi
+      done
+    fi
+    rm -rf "$tmp"
+  fi
+else
+  # No extra sizes wanted (or no game file found): remove the launcher's copies.
+  for file in "$world_out" "$text_out"; do
+    if ours "$file"; then
+      rm "$file"
+      changed=1
+    fi
+  done
+fi
+if [ "$changed" = 1 ] && [ -d "$cache" ]; then
+  find "$cache" -mindepth 1 -delete
+  echo "World sizes changed (bigger_maps); emptied the game's cache."
 fi
 
 # Text size: the sizes in the game's theme file times font_scale, always

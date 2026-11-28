@@ -95,11 +95,12 @@ if [ ! -d "$my_games/BUG Mod" ]; then
 fi
 
 # Resolution and fullscreen from live/civ4/civ4.conf, written into the game's
-# own settings file at every start.
+# own settings file at every start; bigger_maps is used further down.
 screen_width=""
 screen_height=""
 fullscreen=""
 font_scale=""
+bigger_maps=""
 conf="${XDG_CONFIG_HOME:-$HOME/.config}/civ4/civ4.conf"
 if [ -f "$conf" ]; then
   # shellcheck source=/dev/null
@@ -121,6 +122,103 @@ if [ -f "$ini" ]; then
 else
   echo "First start: the game creates its settings file now. The resolution"
   echo "from ~/.config/civ4/civ4.conf applies from the next start on."
+fi
+
+# Extra world sizes (bigger_maps in civ4.conf): a copy of the game's world
+# sizes with new ones added, modelled on Huge, in CustomAssets. Rewritten
+# only when it changes; then the game's cache is emptied.
+marker='<!-- Written by the civ4 launcher from bigger_maps in civ4.conf. -->'
+world_out="$my_games/CustomAssets/XML/GameInfo/CIV4WorldInfo.xml"
+text_out="$my_games/CustomAssets/XML/Text/CIV4GameText_BiggerMaps.xml"
+cache="$WINEPREFIX/drive_c/users/$USER/AppData/Local/My Games/Beyond the Sword/cache"
+ours() { [ -f "$1" ] && grep -qF "$marker" "$1"; }
+changed=0
+for size in $bigger_maps; do
+  if ! [[ $size =~ ^[A-Za-z]+:([0-9]+)x([0-9]+):([0-9]+)$ ]] ||
+    (( BASH_REMATCH[1] % 4 || BASH_REMATCH[2] % 4 )) ||
+    (( BASH_REMATCH[3] < 2 || BASH_REMATCH[3] > 18 )); then
+    echo "bigger_maps: '$size' is not NAME:WIDTHxHEIGHT:CIVS (multiples of 4, 2-18 civs); no extra sizes." >&2
+    bigger_maps=""
+    break
+  fi
+done
+world_in=$(find "$bts/Assets" -ipath '*/XML/GameInfo/CIV4WorldInfo.xml' -print -quit 2>/dev/null || true)
+if [ -n "$bigger_maps" ] && [ -n "$world_in" ]; then
+  if [ -f "$world_out" ] && ! ours "$world_out"; then
+    echo "$world_out is not the launcher's; leaving it alone (no extra sizes)." >&2
+  else
+    tmp=$(mktemp -d)
+    # Copy the game's file; at the end of the list, add each new size as a
+    # copy of Huge with its own name, grid (4 tiles per grid square) and
+    # number of civilizations. Text keys that need a text go to keys.tsv.
+    awk -v sizes="$bigger_maps" -v marker="$marker" -v keys="$tmp/keys.tsv" '
+      function emit(spec,   f, wh, up, i, line, key) {
+        split(spec, f, ":"); split(f[2], wh, "x"); up = toupper(f[1])
+        for (i = 1; i <= n; i++) {
+          line = huge[i]
+          if (line ~ /<(Type|Description|Help)>/) {
+            gsub(/HUGE/, up, line)
+            if (line ~ /<(Description|Help)>/ && match(line, /TXT_KEY_[A-Z0-9_]+/)) {
+              key = substr(line, RSTART, RLENGTH)
+              print key "\t" f[1] (line ~ /<Help>/ ? ": " wh[1] " x " wh[2] " tiles" : "") > keys
+            }
+          }
+          else if (line ~ /<iGridWidth>/) sub(/>[0-9]+</, ">" wh[1] / 4 "<", line)
+          else if (line ~ /<iGridHeight>/) sub(/>[0-9]+</, ">" wh[2] / 4 "<", line)
+          else if (line ~ /<iDefaultPlayers>/) sub(/>[0-9]+</, ">" f[3] "<", line)
+          print line
+        }
+      }
+      NR == 1 { print; print marker (/\r$/ ? "\r" : ""); next }
+      /<WorldInfo>/ { inblock = 1; m = 0 }
+      inblock { block[++m] = $0 }
+      inblock && /<Type>WORLDSIZE_HUGE</ { ishuge = 1 }
+      inblock && /<\/WorldInfo>/ {
+        inblock = 0
+        if (ishuge) { n = m; for (i = 1; i <= m; i++) huge[i] = block[i]; ishuge = 0 }
+      }
+      /<\/WorldInfos>/ && n { c = split(sizes, s, " "); for (j = 1; j <= c; j++) emit(s[j]) }
+      { print }
+    ' "$world_in" > "$tmp/world.xml"
+    if [ ! -s "$tmp/keys.tsv" ]; then
+      echo "No Huge world size found in $world_in; no extra sizes." >&2
+    else
+      {
+        echo '<?xml version="1.0" encoding="ISO-8859-1"?>'
+        echo "$marker"
+        echo '<Civ4GameText xmlns="http://www.firaxis.com">'
+        while IFS=$'\t' read -r key text; do
+          echo "  <TEXT>"
+          echo "    <Tag>$key</Tag>"
+          for lang in English French German Italian Spanish; do
+            echo "    <$lang>$text</$lang>"
+          done
+          echo "  </TEXT>"
+        done < "$tmp/keys.tsv"
+        echo '</Civ4GameText>'
+      } > "$tmp/text.xml"
+      mkdir -p "$(dirname "$world_out")" "$(dirname "$text_out")"
+      for pair in "world.xml:$world_out" "text.xml:$text_out"; do
+        if ! cmp -s "$tmp/${pair%%:*}" "${pair#*:}"; then
+          cp "$tmp/${pair%%:*}" "${pair#*:}"
+          changed=1
+        fi
+      done
+    fi
+    rm -rf "$tmp"
+  fi
+else
+  # No extra sizes wanted (or no game file found): remove the launcher's copies.
+  for file in "$world_out" "$text_out"; do
+    if ours "$file"; then
+      rm "$file"
+      changed=1
+    fi
+  done
+fi
+if [ "$changed" = 1 ] && [ -d "$cache" ]; then
+  find "$cache" -mindepth 1 -delete
+  echo "World sizes changed (bigger_maps); emptied the game's cache."
 fi
 
 # Text size: the sizes in the game's theme file times font_scale, always
